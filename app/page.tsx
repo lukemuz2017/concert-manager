@@ -11,7 +11,7 @@ const SECTIONS: { title: string; items: Item[] }[] = [
     items: [
       { name: "Candyland Vibes", href: "/mood-boards/candyland" },
       { name: "Timeless Classical", href: "/mood-boards/classical" },
-      { name: "Mood board 3" },
+      { name: "Four Nations", href: "/mood-boards/avatar" },
     ],
   },
   {
