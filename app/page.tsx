@@ -10,7 +10,7 @@ const SECTIONS: { title: string; items: Item[] }[] = [
     title: "Mood boards",
     items: [
       { name: "Candyland Vibes", href: "/mood-boards/candyland" },
-      { name: "Mood board 2" },
+      { name: "Timeless Classical", href: "/mood-boards/classical" },
       { name: "Mood board 3" },
     ],
   },
