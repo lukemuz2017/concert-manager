@@ -63,6 +63,8 @@ style that is not the agent's default, and nothing extra.
 
 - Windows. PowerShell blocks `npm.ps1`, so run `npm.cmd run dev`. If `node` is not found,
   Node lives in `C:\Program Files\nodejs`.
+- Each theme's tokens, fonts, and components live in `app/_themes/<theme>/`. The mood board,
+  design system, and site import from there; never redefine theme values inside a page.
 - Theme reference images live next to their page (e.g. `app/mood-boards/candyland/images/`)
   and are statically imported with `next/image`. Credit the source in the tile caption.
 
