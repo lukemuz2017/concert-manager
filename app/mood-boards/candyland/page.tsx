@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Image, { type StaticImageData } from "next/image";
 import Link from "next/link";
-import { Fredoka, Nunito } from "next/font/google";
+
+import { fontVariables } from "@/app/_themes/candyland/fonts";
+import { color, shadow, STAGES } from "@/app/_themes/candyland/tokens";
 
 import boardLayout from "./images/candyland_layout.jpg";
 import boxCover from "./images/candyland_cover.jpg";
@@ -13,24 +15,12 @@ import candyStands from "./images/candies_3_wir.jpg";
 import concessions from "./images/candies_wir.jpg";
 import candyPlanet from "./images/candy_planet.jpg";
 
-const fredoka = Fredoka({ subsets: ["latin"], variable: "--font-fredoka" });
-const nunito = Nunito({ subsets: ["latin"], variable: "--font-nunito" });
-
 export const metadata: Metadata = {
   title: "Candyland Vibes mood board",
 };
 
-// Stage colors do identity only. Text always sits dark-on-cream.
-const CREAM = "#FFF6E6";
-const INK = "#3B1F2B";
-const STAGES = [
-  { name: "Peppermint Forest", hex: "#E63946" },
-  { name: "Lollipop Woods", hex: "#FFC93C" },
-  { name: "Molasses Swamp", hex: "#A0612B" },
-  { name: "Gumdrop Mountains", hex: "#3DBE5A" },
-  { name: "Ice Cream Sea", hex: "#3FA9F5" },
-  { name: "Licorice Castle", hex: "#7B3FC4" },
-];
+const CREAM = color.background;
+const INK = color.text;
 const [PEPPERMINT, LOLLIPOP, MOLASSES, GUMDROP, ICE_CREAM, LICORICE] = STAGES;
 
 const display = { fontFamily: "var(--font-fredoka)" };
@@ -125,16 +115,24 @@ const PATH_SQUARES = Array.from({ length: 14 }, (_, i) => ({
 export default function CandylandMoodBoard() {
   return (
     <main
-      className={`${fredoka.variable} ${nunito.variable} min-h-screen px-4 py-10 sm:px-8`}
+      className={`${fontVariables} min-h-screen px-4 py-10 sm:px-8`}
       style={{ background: CREAM, color: INK, fontFamily: "var(--font-nunito)" }}
     >
       <header className="mx-auto mb-8 max-w-6xl">
-        <Link
-          href="/"
-          className="text-sm font-bold underline decoration-2 underline-offset-4 hover:text-[#D7263D] focus-visible:rounded focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#3FA9F5]"
-        >
-          ← All boards
-        </Link>
+        <nav className="flex flex-wrap gap-x-6 gap-y-2 text-sm font-bold">
+          <Link
+            href="/"
+            className="underline decoration-2 underline-offset-4 hover:decoration-4 focus-visible:rounded focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#3B1F2B]"
+          >
+            ← Home
+          </Link>
+          <Link
+            href="/design-systems/candyland"
+            className="underline decoration-2 underline-offset-4 hover:decoration-4 focus-visible:rounded focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#3B1F2B]"
+          >
+            Design system →
+          </Link>
+        </nav>
         <p className="mt-6 text-xs font-extrabold uppercase tracking-[0.18em] text-[#6B4A57]">
           Mood board 1 of 3 · Candyland
         </p>
@@ -337,8 +335,8 @@ export default function CandylandMoodBoard() {
         <Tile caption="Interface · Primary action" className="col-span-2">
           <div className="flex h-full items-center justify-center bg-white">
             <span
-              className="rounded-2xl px-5 py-3 text-lg font-semibold whitespace-nowrap text-white shadow-[0_5px_0_#8F1526]"
-              style={{ ...display, background: "#D7263D" }}
+              className="rounded-2xl px-5 py-3 text-lg font-semibold whitespace-nowrap text-white"
+              style={{ ...display, background: color.accent, boxShadow: shadow.button }}
             >
               Add to my set list
             </span>
