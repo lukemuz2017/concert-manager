@@ -34,7 +34,7 @@ export const shadow = {
 
 // The four type roles. Buttons use Fredoka 600 at body size.
 export const TYPE = {
-  display: "font-(family-name:--font-fredoka) text-[56px] leading-none font-bold",
+  display: "font-(family-name:--font-fredoka) text-[40px] leading-none font-bold sm:text-[56px]",
   heading: "font-(family-name:--font-fredoka) text-2xl leading-tight font-semibold",
   body: "text-base leading-relaxed",
   label: "text-xs font-extrabold uppercase tracking-[0.16em]",

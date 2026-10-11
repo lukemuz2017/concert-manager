@@ -2,10 +2,9 @@
 
 import Link from "next/link";
 import {
-  useEffect,
   useId,
-  useRef,
   type ButtonHTMLAttributes,
+  type ComponentProps,
   type InputHTMLAttributes,
   type KeyboardEvent,
   type ReactNode,
@@ -24,7 +23,7 @@ import { TYPE, type Stage } from "./tokens";
 export type Force = "hover" | "focus" | "pressed";
 
 // Focus is always a 3px cocoa ring: 13.8:1 on cream, whatever the control's color.
-const FOCUS = "focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-(--text)";
+export const FOCUS = "focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-(--text)";
 const FOCUSED = "outline-3 outline-offset-2 outline-(--text)";
 
 // Disabled is flat with a dashed edge, so it never looks pressable.
@@ -51,9 +50,17 @@ export function CheckIcon({ className = "h-4 w-4" }: { className?: string }) {
   );
 }
 
-function WarningIcon() {
+export function CloseIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0">
+    <svg aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4 shrink-0">
+      <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function WarningIcon({ className = "h-3.5 w-3.5" }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" className={`shrink-0 ${className}`}>
       <path d="M8 1.8 14.8 14H1.2Z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
       <path d="M8 6.2v3.4M8 11.8v.2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
@@ -110,14 +117,15 @@ export function Button({
   );
 }
 
-// The product's main action. Once pressed it stays down: the set is on your list.
+// The product's main action. Once pressed it stays down: the set is in your plan.
 export function AddButton({
   added,
   onToggle,
   force,
   disabled,
-  label = "Add to my set list",
-  addedLabel = "On my set list",
+  label = "Add to plan",
+  addedLabel = "In your plan",
+  artist,
 }: {
   added: boolean;
   onToggle?: () => void;
@@ -125,12 +133,15 @@ export function AddButton({
   disabled?: boolean;
   label?: string;
   addedLabel?: string;
+  // In a list, name the artist so "Add" isn't ambiguous to a screen reader.
+  artist?: string;
 }) {
   const recipe = added ? BUTTON.added : BUTTON.primary;
   return (
     <button
       type="button"
       aria-pressed={added}
+      aria-label={artist ? `${added ? addedLabel : label}: ${artist}` : undefined}
       disabled={disabled}
       onClick={onToggle}
       className={`${BUTTON_BASE} ${recipe.rest} ${pinned(recipe, force)}`}
@@ -149,6 +160,29 @@ export function TextLink({ href, force, children }: { href: string; force?: "hov
     <Link href={href} className={`${LINK} ${look}`}>
       {children}
     </Link>
+  );
+}
+
+const ICON_PINNED = { hover: "bg-(--wash)!", pressed: "bg-(--wash)! translate-y-[2px]! shadow-none!" };
+
+// A small round button for close and remove. Always given a spoken label.
+export function IconButton({
+  label,
+  force,
+  className = "",
+  children,
+  ...props
+}: ComponentProps<"button"> & { label: string; force?: Force }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-(--text) bg-(--surface) text-(--text) shadow-[0_2px_0_var(--text)] transition duration-75 enabled:cursor-pointer enabled:hover:bg-(--wash) enabled:active:translate-y-[2px] enabled:active:shadow-none ${FOCUS} ${DISABLED} ${pinned(ICON_PINNED, force)} ${className}`}
+      {...props}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -187,21 +221,24 @@ export function Chip({
   );
 }
 
-// Badges label things; they are never buttons, so they are smaller and set in the label style.
-export function Badge({ tone }: { tone: "headliner" | "crash" }) {
-  if (tone === "crash") {
+// Badges label status; they are never buttons, so they are small and set in the label style.
+// Billing is carried by type size on the poster, so there is no headliner badge.
+export function Badge({ tone, count }: { tone: "crash" | "count"; count?: number }) {
+  if (tone === "count") {
     return (
       <span
-        className={`inline-flex -rotate-2 items-center gap-1 rounded-full border-2 border-(--text) bg-(--surface) px-2 py-0.5 whitespace-nowrap shadow-[0_2px_0_var(--text)] ${TYPE.label}`}
+        className={`inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-(--text) px-1.5 text-(--bg) tabular-nums ${TYPE.label} tracking-normal!`}
       >
-        <WarningIcon />
-        Sugar Crash
+        {count}
       </span>
     );
   }
   return (
-    <span className={`inline-flex items-center rounded-full bg-(--wash) px-2 py-0.5 whitespace-nowrap ${TYPE.label}`}>
-      Headliner
+    <span
+      className={`inline-flex -rotate-2 items-center gap-1 rounded-full border-2 border-(--text) bg-(--surface) px-2 py-0.5 whitespace-nowrap shadow-[0_2px_0_var(--text)] ${TYPE.label}`}
+    >
+      <WarningIcon />
+      Sugar Crash
     </span>
   );
 }
@@ -421,166 +458,5 @@ export function Tabs({
         {children}
       </div>
     </div>
-  );
-}
-
-/* Sets: card, list row, detail panel, modal ------------------------------ */
-
-export type FestivalSet = {
-  artist: string;
-  stage: Stage;
-  day: string;
-  time: string;
-  blurb: string;
-  headliner?: boolean;
-};
-
-export function ArtistCard({
-  set,
-  added,
-  clash,
-  onToggle,
-  onDetails,
-}: {
-  set: FestivalSet;
-  added: boolean;
-  clash?: boolean;
-  onToggle?: () => void;
-  onDetails?: () => void;
-}) {
-  return (
-    <article
-      className="flex flex-col rounded-2xl border-l-[10px] bg-(--surface) p-4 shadow-[0_4px_0_rgba(59,31,43,0.15)]"
-      style={{ borderLeftColor: set.stage.hex }}
-    >
-      <div className="flex min-h-6 flex-wrap items-center justify-between gap-2">
-        <p className={`${TYPE.label} text-(--muted)`}>
-          {set.day} · {set.time}
-        </p>
-        {clash ? <Badge tone="crash" /> : set.headliner && <Badge tone="headliner" />}
-      </div>
-      <h3 className={`mt-2 ${TYPE.heading}`}>{set.artist}</h3>
-      <p className="mt-1 flex items-center gap-1.5 text-(--muted)">
-        <Dot stage={set.stage} />
-        {set.stage.name}
-      </p>
-      <div className="mt-4 flex flex-wrap gap-3 pb-[5px]">
-        <AddButton added={added} onToggle={onToggle} />
-        {onDetails && (
-          <Button variant="secondary" onClick={onDetails}>
-            Details
-          </Button>
-        )}
-      </div>
-    </article>
-  );
-}
-
-// A schedule row. The whole row is the checkbox's label, so the row is the hit area.
-export function SetRow({
-  set,
-  added,
-  clash,
-  onToggle,
-}: {
-  set: FestivalSet;
-  added: boolean;
-  clash?: boolean;
-  onToggle?: () => void;
-}) {
-  return (
-    <li>
-      <label
-        className={`flex cursor-pointer items-center gap-3 rounded-2xl px-3 py-2.5 transition duration-75 ${added ? "bg-(--wash)" : "hover:bg-(--wash)/50"}`}
-      >
-        <Box checked={added} onChange={onToggle} />
-        <span className={`w-16 shrink-0 ${TYPE.label} text-(--muted)`}>{set.time}</span>
-        {/* On narrow screens the badge wraps under the name instead of squeezing it. */}
-        <span className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-          <span className="min-w-0">
-            <span className="block font-bold">{set.artist}</span>
-            <span className="flex items-center gap-1.5 text-(--muted)">
-              <Dot stage={set.stage} />
-              {set.stage.name}
-            </span>
-          </span>
-          {clash && <Badge tone="crash" />}
-        </span>
-      </label>
-    </li>
-  );
-}
-
-export function DetailPanel({
-  set,
-  added,
-  onToggle,
-  onClose,
-  titleId,
-}: {
-  set: FestivalSet;
-  added: boolean;
-  onToggle?: () => void;
-  onClose?: () => void;
-  titleId?: string;
-}) {
-  return (
-    <div className="overflow-hidden rounded-2xl bg-(--surface)">
-      <div className="h-3" style={{ background: set.stage.hex }} />
-      <div className="p-5 sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className={`${TYPE.label} text-(--muted)`}>
-            {set.day} · {set.time} · {set.stage.name}
-          </p>
-          {set.headliner && <Badge tone="headliner" />}
-        </div>
-        <h3 id={titleId} className={`mt-2 ${TYPE.heading}`}>
-          {set.artist}
-        </h3>
-        <p className={`mt-3 ${TYPE.body}`}>{set.blurb}</p>
-        <div className="mt-5 flex flex-wrap gap-3 pb-[5px]">
-          <AddButton added={added} onToggle={onToggle} />
-          {onClose && (
-            <Button variant="secondary" onClick={onClose}>
-              Close
-            </Button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// A native <dialog>: it traps focus, closes on Escape, and hands focus back on close.
-export function Modal({
-  open,
-  onClose,
-  labelledBy,
-  children,
-}: {
-  open: boolean;
-  onClose: () => void;
-  labelledBy: string;
-  children: ReactNode;
-}) {
-  const ref = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    const dialog = ref.current;
-    if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
-    if (!open && dialog.open) dialog.close();
-  }, [open]);
-
-  return (
-    <dialog
-      ref={ref}
-      aria-labelledby={labelledBy}
-      onClose={onClose}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-      className="m-auto w-[min(30rem,calc(100%-2rem))] rounded-2xl bg-transparent p-0 text-(--text) shadow-[0_6px_0_rgba(59,31,43,0.35)] backdrop:bg-[#3B1F2B]/60"
-    >
-      {children}
-    </dialog>
   );
 }

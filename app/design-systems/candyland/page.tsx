@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import { contrast, grade } from "@/app/_lib/contrast";
 import { fontVariables } from "@/app/_themes/candyland/fonts";
+import { LINEUP } from "@/app/_themes/candyland/lineup";
 import { color, cssVars, shadow, STAGES, TYPE } from "@/app/_themes/candyland/tokens";
 import {
   AddButton,
@@ -12,7 +13,9 @@ import {
   CheckIcon,
   Checkbox,
   Chip,
+  CloseIcon,
   Dot,
+  IconButton,
   TextField,
   TextLink,
   Toggle,
@@ -20,7 +23,6 @@ import {
 
 import { LiveComponents } from "./_live";
 import { Panel } from "./_parts";
-import { findSet } from "./_sample";
 
 export const metadata: Metadata = {
   title: "Candyland Vibes design system",
@@ -116,8 +118,8 @@ const failingStages = STAGES.filter((s) => contrast(s.hex, color.background) < 4
 const TYPE_ROLES = [
   {
     role: "Display",
-    spec: "Fredoka · Bold 700 · 56 / 56",
-    use: "Page titles and the festival name. Once per page.",
+    spec: "Fredoka · Bold 700 · 56 / 56, 40 on phones",
+    use: "Page titles, the festival name, and headliners on the poster.",
     sample: <p className={TYPE.display}>Sugar Rush</p>,
   },
   {
@@ -170,12 +172,12 @@ const MATRIX: { name: string; cells: (ReactNode | null)[] }[] = [
   {
     name: "Primary button",
     cells: [
-      <Button key="rest">Add set</Button>,
-      <Button key="hover" force="hover">Add set</Button>,
-      <Button key="focus" force="focus">Add set</Button>,
-      <Button key="pressed" force="pressed">Add set</Button>,
+      <Button key="rest">Add</Button>,
+      <Button key="hover" force="hover">Add</Button>,
+      <Button key="focus" force="focus">Add</Button>,
+      <Button key="pressed" force="pressed">Add</Button>,
       <AddButton key="selected" added addedLabel="Added" />,
-      <Button key="disabled" disabled>Add set</Button>,
+      <Button key="disabled" disabled>Add</Button>,
     ],
   },
   {
@@ -187,6 +189,17 @@ const MATRIX: { name: string; cells: (ReactNode | null)[] }[] = [
       <Button key="pressed" variant="secondary" force="pressed">Details</Button>,
       null,
       <Button key="disabled" variant="secondary" disabled>Details</Button>,
+    ],
+  },
+  {
+    name: "Icon button",
+    cells: [
+      <IconButton key="rest" label="Close"><CloseIcon /></IconButton>,
+      <IconButton key="hover" label="Close" force="hover"><CloseIcon /></IconButton>,
+      <IconButton key="focus" label="Close" force="focus"><CloseIcon /></IconButton>,
+      <IconButton key="pressed" label="Close" force="pressed"><CloseIcon /></IconButton>,
+      null,
+      <IconButton key="disabled" label="Close" disabled><CloseIcon /></IconButton>,
     ],
   },
   {
@@ -292,9 +305,10 @@ function StateCard({ title, children }: { title: string; children: ReactNode }) 
 }
 
 export default function CandylandDesignSystem() {
-  const lolly = findSet("Lolly & the Lickables");
-  const brainFreeze = findSet("Brain Freeze");
-  const gumdrop = findSet("Gumdrop Velvet");
+  const find = (artist: string) => LINEUP.find((s) => s.artist === artist)!;
+  const lolly = find("Lolly & the Lickables");
+  const brainFreeze = find("Brain Freeze");
+  const gumdrop = find("Gumdrop Velvet");
 
   return (
     <main
@@ -549,7 +563,7 @@ export default function CandylandDesignSystem() {
           id="components"
           n={4}
           title="Components"
-          intro="The live library: everything here works, and the site is built from these same components. Nothing is saved; it resets on reload."
+          intro="The live library. Everything works, and the site is built from these same components. Nothing is saved; it resets on reload."
         >
           <LiveComponents />
         </Section>
@@ -614,9 +628,9 @@ export default function CandylandDesignSystem() {
                     strokeDasharray="5 4"
                   />
                 </svg>
-                <h3 className={`mt-4 ${TYPE.heading}`}>Your set list is empty</h3>
+                <h3 className={`mt-4 ${TYPE.heading}`}>Your plan is empty</h3>
                 <p className="mt-2 max-w-xs text-(--muted)">
-                  Add sets from the lineup and they line up here by day and time.
+                  Tap a name on the poster or search to add sets. They line up here by time.
                 </p>
                 <div className="mt-5 pb-1">
                   <Button variant="secondary">Browse the lineup</Button>
@@ -678,7 +692,7 @@ export default function CandylandDesignSystem() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p>
-                    <b>{gumdrop.artist}</b> is on your set list.
+                    <b>{gumdrop.artist}</b> is in your plan.
                   </p>
                   <p className="text-(--muted)">
                     {gumdrop.day} · {gumdrop.time} · {gumdrop.stage.name}
