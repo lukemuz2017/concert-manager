@@ -184,9 +184,14 @@ export default function ClassicalMoodBoard() {
     >
       <div className="mx-auto max-w-6xl">
         <header>
-          <Link href="/" className={`text-sm font-semibold ${LINK}`}>
-            ← Home
-          </Link>
+          <nav className="flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold">
+            <Link href="/" className={LINK}>
+              ← Home
+            </Link>
+            <Link href="/design-systems/classical" className={LINK}>
+              Design system →
+            </Link>
+          </nav>
           <div className="mt-10 flex flex-col items-center text-center">
             <Ornament className="w-40 text-[#D4B06A]" />
             <p className={`mt-4 ${CAPS} text-[#5F5B52]`}>Mood board 2 of 3 · Classical</p>
@@ -448,7 +453,7 @@ export default function ClassicalMoodBoard() {
                 <div className="border-l-4 border-[#C97B63] p-5">
                   <p className={`${SERIF} text-lg italic`}>You are expected in two salons at once.</p>
                   <p className="mt-1 text-[#5F5B52]">
-                    Bach in the Royal Chapel and Schubert in the Orangery both begin at 7:00 PM.
+                    Bach in the Royal Chapel and Boccherini in the Orangery both begin at 7:00 PM.
                     Choose one.
                   </p>
                 </div>

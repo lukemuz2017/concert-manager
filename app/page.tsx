@@ -18,7 +18,7 @@ const SECTIONS: { title: string; items: Item[] }[] = [
     title: "Design systems",
     items: [
       { name: "Candyland Vibes", href: "/design-systems/candyland" },
-      { name: "Design system 2" },
+      { name: "Timeless Classical", href: "/design-systems/classical" },
       { name: "Design system 3" },
     ],
   },
