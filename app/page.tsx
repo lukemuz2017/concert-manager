@@ -24,7 +24,7 @@ const SECTIONS: { title: string; items: Item[] }[] = [
   },
   {
     title: "The site",
-    items: [{ name: "Festival planner" }],
+    items: [{ name: "Festival planner · Four Nations", href: "/planner" }],
   },
 ];
 
