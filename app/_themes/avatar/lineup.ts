@@ -176,23 +176,143 @@ export function clashesWith(set: FestivalSet, saved: FestivalSet[]) {
   return saved.filter((s) => s.artist !== set.artist && s.day === set.day && s.time === set.time);
 }
 
-/* The grounds: where stages sit, and how long it takes to walk between them -- */
+/* The grounds: stages, the gate, and the trails between them ----------------- */
+
+export type Point = { x: number; y: number };
+// Somewhere you can stand: the main gate or a stage.
+export type Place = Stage["name"] | "gate";
 
 // Map coordinates on a 100 × 64 grid of the festival grounds.
-export const GATE = { x: 50, y: 62 };
-export const STAGE_POS: Record<Stage["name"], { x: number; y: number }> = {
+export const GATE: Point = { x: 50, y: 62 };
+export const STAGE_POS: Record<Stage["name"], Point> = {
   "Western Air Temple": { x: 14, y: 12 },
   "Spirit Oasis": { x: 84, y: 10 },
   "Wan Shi Tong's Library": { x: 20, y: 40 },
   "Crystal Catacombs": { x: 50, y: 28 },
   "Royal Caldera": { x: 82, y: 44 },
-  "Ember Island": { x: 67, y: 52 },
+  "Ember Island": { x: 64, y: 56 },
 };
 
-const WALK_PER_UNIT = 0.3; // minutes per map unit
+// Where trails meet. The river runs from a spring below the cliffs, under the rope
+// bridge, and out east, so the Spirit Oasis is reached by the bridge or the cliff path.
+export const LANDMARKS = {
+  market: { x: 50, y: 48, label: "Market" },
+  teaHouse: { x: 32, y: 24, label: "Tea house" },
+  bridge: { x: 70, y: 30, label: "Rope bridge" },
+} as const;
+export const RIVER = "M62 13C64 20 66 25 70 30S86 36 100 39";
 
-export function walkMinutes(from: { x: number; y: number }, to: { x: number; y: number }) {
-  return Math.max(1, Math.round(Math.hypot(from.x - to.x, from.y - to.y) * WALK_PER_UNIT));
+type Node = Place | keyof typeof LANDMARKS;
+const NODE_POS: Record<Node, Point> = { gate: GATE, ...STAGE_POS, ...LANDMARKS };
+
+// Each trail bends a little: `bend` pushes its middle sideways, in map units.
+export const TRAILS: { from: Node; to: Node; bend: number; name?: string }[] = [
+  { from: "gate", to: "market", bend: 0 },
+  { from: "market", to: "Wan Shi Tong's Library", bend: 4 },
+  { from: "market", to: "Crystal Catacombs", bend: -2 },
+  { from: "market", to: "Ember Island", bend: -2 },
+  { from: "Ember Island", to: "Royal Caldera", bend: 2 },
+  { from: "Crystal Catacombs", to: "bridge", bend: 3 },
+  { from: "bridge", to: "Spirit Oasis", bend: -3 },
+  { from: "bridge", to: "Royal Caldera", bend: 2 },
+  { from: "Crystal Catacombs", to: "teaHouse", bend: -2 },
+  { from: "teaHouse", to: "Western Air Temple", bend: 2 },
+  { from: "teaHouse", to: "Wan Shi Tong's Library", bend: 3 },
+  { from: "Western Air Temple", to: "Spirit Oasis", bend: -14, name: "Cliff path" },
+];
+
+// A trail is a quadratic curve; its control point sits off the midpoint by `bend`.
+function control(a: Point, b: Point, bend: number): Point {
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  return { x: (a.x + b.x) / 2 + (-(b.y - a.y) / len) * bend, y: (a.y + b.y) / 2 + ((b.x - a.x) / len) * bend };
+}
+
+function along(a: Point, c: Point, b: Point, t: number): Point {
+  const u = 1 - t;
+  return { x: u * u * a.x + 2 * u * t * c.x + t * t * b.x, y: u * u * a.y + 2 * u * t * c.y + t * t * b.y };
+}
+
+function curveLength(a: Point, c: Point, b: Point) {
+  let length = 0;
+  let prev = a;
+  for (let i = 1; i <= 24; i++) {
+    const p = along(a, c, b, i / 24);
+    length += Math.hypot(p.x - prev.x, p.y - prev.y);
+    prev = p;
+  }
+  return length;
+}
+
+const EDGES = TRAILS.map((t) => {
+  const a = NODE_POS[t.from];
+  const b = NODE_POS[t.to];
+  const c = control(a, b, t.bend);
+  return { ...t, a, b, c, length: curveLength(a, c, b) };
+});
+
+// The SVG path for one whole trail, for drawing the grounds.
+export function trailPath(t: (typeof TRAILS)[number]) {
+  const a = NODE_POS[t.from];
+  const b = NODE_POS[t.to];
+  const c = control(a, b, t.bend);
+  return `M${a.x} ${a.y}Q${c.x.toFixed(2)} ${c.y.toFixed(2)} ${b.x} ${b.y}`;
+}
+
+// The shortest way along the trails between two places. The graph is tiny, so a
+// plain Dijkstra over a dozen trails is plenty.
+function shortest(from: Node, to: Node) {
+  const dist = new Map<Node, number>([[from, 0]]);
+  const prev = new Map<Node, (typeof EDGES)[number]>();
+  const done = new Set<Node>();
+  while (true) {
+    let here: Node | null = null;
+    for (const [n, d] of dist) if (!done.has(n) && (here === null || d < dist.get(here)!)) here = n;
+    if (here === null || here === to) break;
+    done.add(here);
+    for (const e of EDGES) {
+      const next = e.from === here ? e.to : e.to === here ? e.from : null;
+      if (!next || done.has(next)) continue;
+      const d = dist.get(here)! + e.length;
+      if (d < (dist.get(next) ?? Infinity)) {
+        dist.set(next, d);
+        prev.set(next, e);
+      }
+    }
+  }
+  const steps: { a: Point; c: Point; b: Point }[] = [];
+  for (let n = to; n !== from; ) {
+    const e = prev.get(n)!;
+    const forward = e.to === n;
+    steps.unshift(forward ? { a: e.a, c: e.c, b: e.b } : { a: e.b, c: e.c, b: e.a });
+    n = forward ? e.from : e.to;
+  }
+  return { steps, length: dist.get(to) ?? 0 };
+}
+
+// One leg of a day's route, drawn along the trails. Its label sits halfway along the
+// leg's longest stretch of trail, clear of the junctions.
+export function routeBetween(from: Place, to: Place) {
+  const { steps, length } = shortest(from, to);
+  const d = steps.length
+    ? `M${steps[0].a.x} ${steps[0].a.y}` +
+      steps.map((p) => `Q${p.c.x.toFixed(2)} ${p.c.y.toFixed(2)} ${p.b.x} ${p.b.y}`).join("")
+    : "";
+  const longest = steps.reduce<(typeof steps)[number] | null>(
+    (best, p) => (!best || curveLength(p.a, p.c, p.b) > curveLength(best.a, best.c, best.b) ? p : best),
+    null,
+  );
+  const mid = longest ? along(longest.a, longest.c, longest.b, 0.5) : NODE_POS[from];
+  // A quadratic's direction at its middle is simply end minus start.
+  const span = longest ? Math.hypot(longest.b.x - longest.a.x, longest.b.y - longest.a.y) : 1;
+  const dir = longest ? { x: (longest.b.x - longest.a.x) / span, y: (longest.b.y - longest.a.y) / span } : { x: 1, y: 0 };
+  return { d, mid, dir, length, minutes: walkMinutes(from, to) };
+}
+
+const WALK_PER_UNIT = 0.28; // minutes per map unit of trail
+
+export function walkMinutes(from: Place, to: Place) {
+  if (from === to) return 0;
+  return Math.max(1, Math.round(shortest(from, to).length * WALK_PER_UNIT));
 }
 
 // Sets fill every slot back to back, so moving stages between consecutive
@@ -209,7 +329,7 @@ export function legBetween(a: FestivalSet, b: FestivalSet): Leg {
   const gap = SLOTS.indexOf(b.time) - SLOTS.indexOf(a.time) - 1;
   if (gap > 0) return { kind: "free", slots: gap };
   if (a.stage.name === b.stage.name) return { kind: "stay" };
-  const minutes = walkMinutes(STAGE_POS[a.stage.name], STAGE_POS[b.stage.name]);
+  const minutes = walkMinutes(a.stage.name, b.stage.name);
   return { kind: "walk", minutes, tight: minutes >= TIGHT_WALK };
 }
 

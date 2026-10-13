@@ -19,14 +19,21 @@ import {
 import {
   GATE,
   GENRES,
+  LANDMARKS,
   legBetween,
   LINEUP,
+  RIVER,
+  routeBetween,
   SLOTS,
   slotMinutes,
   STAGE_POS,
   STAGES,
+  TIGHT_WALK,
+  trailPath,
+  TRAILS,
   walkMinutes,
   type FestivalSet,
+  type Place,
 } from "./lineup";
 import { baseVars, ELEMENT_ORDER, ELEMENTS, elementVars, SHAPE, TYPE, type ElementKey } from "./tokens";
 
@@ -215,6 +222,15 @@ export function FlagIcon({ filled = false, className = "h-4 w-4" }: { filled?: b
   );
 }
 
+export function SearchIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" className={`shrink-0 ${className}`}>
+      <circle cx="6.8" cy="6.8" r="4.6" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M10.3 10.4c1.2 1.1 2.4 2.3 3.5 3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function CheckIcon({ className = "h-4 w-4" }: { className?: string }) {
   return (
     <svg aria-hidden="true" viewBox="0 0 16 16" className={`shrink-0 ${className}`}>
@@ -351,10 +367,10 @@ export function FlagButton({
 }
 
 // Links are ink with an underline in the day's element. On hover the line bends into a wave.
-const LINK = `rounded-sm font-medium underline decoration-(--el-line) decoration-2 underline-offset-[5px] hover:decoration-wavy ${FOCUS}`;
+const LINK = `rounded-sm font-medium underline decoration-(--el-line) decoration-2 underline-offset-[5px] hover:decoration-wavy hover:underline-offset-[8px] ${FOCUS}`;
 
 export function TextLink({ href, force, children }: { href: string; force?: "hover" | "focus"; children: ReactNode }) {
-  const look = force === "hover" ? "decoration-wavy!" : force === "focus" ? FOCUSED : "";
+  const look = force === "hover" ? "decoration-wavy! underline-offset-[8px]!" : force === "focus" ? FOCUSED : "";
   return (
     <Link href={href} className={`${LINK} ${look}`}>
       {children}
@@ -723,7 +739,7 @@ export function LineupRow({
           <button
             type="button"
             onClick={onDetails}
-            className={`block cursor-pointer rounded-sm text-left font-medium underline decoration-2 underline-offset-4 hover:decoration-wavy ${FOCUS}`}
+            className={`block cursor-pointer rounded-sm text-left font-medium underline decoration-2 underline-offset-4 hover:decoration-wavy hover:underline-offset-[8px] ${FOCUS}`}
             style={{ textDecorationColor: ELEMENTS[set.nation].line }}
           >
             {set.artist}
@@ -827,11 +843,13 @@ export function Modal({
   open,
   onClose,
   labelledBy,
+  width = "w-[min(32rem,calc(100%-2rem))]",
   children,
 }: {
   open: boolean;
   onClose: () => void;
   labelledBy: string;
+  width?: string;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -849,7 +867,7 @@ export function Modal({
       aria-labelledby={labelledBy}
       onClose={onClose}
       onClick={(e) => e.target === e.currentTarget && onClose()}
-      className="m-auto w-[min(32rem,calc(100%-2rem))] overflow-visible bg-transparent p-0 text-(--ink) backdrop:bg-[#2B2B2B]/55"
+      className={`m-auto ${width} overflow-visible bg-transparent p-0 text-(--ink) backdrop:bg-[#2B2B2B]/40 backdrop:backdrop-blur-[4px]`}
     >
       {children}
     </dialog>
@@ -888,9 +906,7 @@ export function BalanceMeter({ saved }: { saved: FestivalSet[] }) {
       <p className="mt-4 text-(--ink-muted)" aria-live="polite">
         {missing.length === 0
           ? "In balance: something on every day."
-          : `${missing.map((m) => ELEMENTS[m.key].name).join(" and ")} ${missing.length > 1 ? "are" : "is"} waiting: nothing on ${missing
-              .map((m) => ELEMENTS[m.key].dayName)
-              .join(" or ")} yet.`}
+          : `${new Intl.ListFormat("en").format(missing.map((m) => ELEMENTS[m.key].name))} ${missing.length > 1 ? "are" : "is"} waiting: nothing on ${new Intl.ListFormat("en", { type: "disjunction" }).format(missing.map((m) => ELEMENTS[m.key].dayName))} yet.`}
       </p>
     </div>
   );
@@ -981,77 +997,191 @@ export function JourneyPath({ day, saved }: { day: ElementKey; saved: FestivalSe
   );
 }
 
-// The grounds, with the day's route drawn from the gate through each stop in order.
+// Where each landmark's name sits beside its marker, clear of the trails through it.
+const LANDMARK_LABEL: Record<string, { dx: number; dy: number; anchor: "start" | "end" }> = {
+  Market: { dx: 2.2, dy: 0.8, anchor: "start" },
+  "Tea house": { dx: 1.4, dy: -2.6, anchor: "start" },
+  "Rope bridge": { dx: -2.6, dy: -3.2, anchor: "end" },
+};
+
+// The grounds as a trail map: footpaths between the gate, the landmarks, and the six
+// stages. The day's route follows the trails from the gate through each stop in order,
+// and every leg says how many minutes it takes on foot. A leg between back-to-back sets
+// that takes ten minutes or more is a tight walk, so its label turns to ink.
 export function JourneyMap({ day, saved }: { day: ElementKey; saved: FestivalSet[] }) {
   const el = ELEMENTS[day];
   const stops: FestivalSet[] = [];
   for (const s of sortBySlot(saved.filter((x) => x.day === day))) {
     if (!stops.some((o) => o.time === s.time)) stops.push(s);
   }
-  const points = [GATE, ...stops.map((s) => STAGE_POS[s.stage.name])];
+  type Box = { x0: number; y0: number; x1: number; y1: number };
+  const legs: { key: string; d: string; mid: { x: number; y: number }; dir: { x: number; y: number }; length: number; minutes: number; tight: boolean; arrival: boolean }[] = [];
+  let from: Place = "gate";
+  stops.forEach((s, i) => {
+    if (s.stage.name !== from) {
+      const r = routeBetween(from, s.stage.name);
+      const backToBack = i > 0 && SLOTS.indexOf(s.time) - SLOTS.indexOf(stops[i - 1].time) === 1;
+      legs.push({ key: `${from}-${s.stage.name}-${i}`, ...r, tight: backToBack && r.minutes >= TIGHT_WALK, arrival: i === 0 });
+    }
+    from = s.stage.name;
+  });
   const label =
     stops.length === 0
       ? `Festival map. No route on ${el.dayName} yet.`
-      : `${el.dayName} route: from the main gate to ${stops.map((s) => s.stage.name).join(", then ")}.`;
+      : `${el.dayName} route along the trails: from the main gate to ${stops
+          .map((s, i) => (i === 0 ? s.stage.name : `${s.stage.name}`))
+          .join(", then ")}. ${legs.map((l) => `${l.minutes} min`).join(", ")} on foot.`;
+  const halo = { paintOrder: "stroke" as const, stroke: "var(--paper)", strokeWidth: 0.9, strokeLinejoin: "round" as const };
+
+  // Each minutes label slides sideways off its trail to wherever it covers the least:
+  // stage circles and names, landmark names, the gate, and the labels already placed.
+  const taken: Box[] = [
+    ...STAGES.flatMap((s) => {
+      const p = STAGE_POS[s.name];
+      const w = s.name.length * 1.3;
+      return [
+        { x0: p.x - 4.4, y0: p.y - 4.4, x1: p.x + 4.4, y1: p.y + 4.4 },
+        { x0: p.x - w / 2, y0: p.y + 4.9, x1: p.x + w / 2, y1: p.y + 7.8 },
+      ];
+    }),
+    ...Object.values(LANDMARKS).flatMap((m) => {
+      const at = LANDMARK_LABEL[m.label];
+      const w = m.label.length * 1.1;
+      const x = m.x + at.dx;
+      return [
+        { x0: m.x - 1.2, y0: m.y - 1.2, x1: m.x + 1.2, y1: m.y + 1.2 },
+        { x0: at.anchor === "end" ? x - w : x, y0: m.y + at.dy - 1.8, x1: at.anchor === "end" ? x : x + w, y1: m.y + at.dy + 0.6 },
+      ];
+    }),
+    { x0: GATE.x - 4.5, y0: GATE.y - 2.5, x1: GATE.x + 4.5, y1: GATE.y + 2.5 },
+  ];
+  const overlap = (a: Box, b: Box) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0));
+  const pills = legs.map((l) => {
+    const normal = { x: -l.dir.y, y: l.dir.x };
+    const spots = [0, 3.6, -3.6, 6.4, -6.4].map((k) => ({ x: l.mid.x + normal.x * k, y: l.mid.y + normal.y * k }));
+    const cost = (p: { x: number; y: number }) => {
+      const box = { x0: p.x - 4.4, y0: p.y - 1.9, x1: p.x + 4.4, y1: p.y + 1.9 };
+      return taken.reduce((sum, t) => sum + overlap(box, t), 0);
+    };
+    const best = spots.reduce((a, b) => (cost(b) < cost(a) - 0.01 ? b : a));
+    taken.push({ x0: best.x - 4.4, y0: best.y - 1.9, x1: best.x + 4.4, y1: best.y + 1.9 });
+    return { ...l, at: best };
+  });
 
   return (
-    <svg role="img" aria-label={label} viewBox="0 0 100 68" className={`w-full border-[1.5px] border-(--ink) bg-(--paper) ${SHAPE.card}`}>
-      {/* Contour lines, only for the feel of a hand-drawn map. */}
-      <g fill="none" stroke="var(--line)" strokeWidth="0.3" opacity="0.6">
-        <path d="M2 20c14-6 24 4 38-2s22-12 36-6 18 4 22 2" />
-        <path d="M2 50c12 4 20-6 34-2s20 10 34 4 20-6 28-2" />
-        <path d="M30 4c4 10-4 18 2 28s-2 20 4 30" />
-      </g>
-      {STAGES.map((s) => (
-        <path
-          key={s.name}
-          d={`M${GATE.x} ${GATE.y}L${STAGE_POS[s.name].x} ${STAGE_POS[s.name].y}`}
-          stroke="var(--line)"
-          strokeWidth="0.4"
-          strokeDasharray="1.2 1.6"
-        />
-      ))}
-      {points.length > 1 && (
-        <polyline
-          points={points.map((p) => `${p.x},${p.y}`).join(" ")}
-          fill="none"
-          stroke="var(--el-line)"
-          strokeWidth="1.3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      )}
-      <rect x={GATE.x - 4.5} y={GATE.y - 2.5} width="9" height="5" rx="1" fill="var(--ink)" />
-      <text x={GATE.x} y={GATE.y + 0.9} textAnchor="middle" fontSize="2.4" fill="var(--paper)" fontWeight="700">
-        GATE
-      </text>
-      {STAGES.map((s) => {
-        const p = STAGE_POS[s.name];
-        const order = stops.findIndex((o) => o.stage.name === s.name);
-        const on = order >= 0;
-        return (
-          <g key={s.name}>
-            <circle cx={p.x} cy={p.y} r="4.2" fill={on ? "var(--el)" : "var(--paper)"} stroke="var(--ink)" strokeWidth="0.6" />
-            <g transform={`translate(${p.x - 2.6} ${p.y - 2.6}) scale(0.108)`} style={{ color: on ? el.on : "var(--ink)" }}>
-              <g fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
-                {EMBLEMS[s.nation]}
-              </g>
-            </g>
-            {on && (
-              <>
-                <circle cx={p.x + 3.8} cy={p.y - 3.4} r="1.9" fill="var(--ink)" />
-                <text x={p.x + 3.8} y={p.y - 2.65} textAnchor="middle" fontSize="2.2" fontWeight="700" fill="var(--paper)">
-                  {order + 1}
-                </text>
-              </>
-            )}
-            <text x={p.x} y={p.y + 7} textAnchor="middle" fontSize="2.6" fontWeight={on ? 700 : 500} fill="var(--ink)">
-              {s.name}
+    <figure>
+      <svg role="img" aria-label={label} viewBox="0 0 100 68" className={`w-full border-[1.5px] border-(--ink) bg-(--paper) ${SHAPE.card}`}>
+        {/* Contour lines, only for the feel of a hand-drawn map. */}
+        <g fill="none" stroke="var(--line)" strokeWidth="0.3" opacity="0.5">
+          <path d="M2 22c14-6 24 4 38-2s22-12 36-6 18 4 22 2" />
+          <path d="M2 56c12 4 20-6 34-2s20 10 34 4 20-6 28-2" />
+        </g>
+        {/* The river, from its spring under the cliffs to the east edge. */}
+        <path d={RIVER} fill="none" stroke={ELEMENTS.water.wash} strokeWidth="3.2" strokeLinecap="round" />
+        <path d={RIVER} fill="none" stroke={ELEMENTS.water.line} strokeWidth="0.3" strokeDasharray="2 2.5" opacity="0.6" />
+        {/* Every trail on the grounds: a dotted footpath. */}
+        <g fill="none" stroke="var(--ink-muted)" strokeWidth="0.55" strokeLinecap="round" strokeDasharray="0.1 1.3">
+          {TRAILS.map((t) => (
+            <path key={`${t.from}-${t.to}`} d={trailPath(t)} />
+          ))}
+        </g>
+        <text x="49" y="8.6" textAnchor="middle" fontSize="2.2" fontStyle="italic" fill="var(--ink-muted)" {...halo}>
+          Cliff path
+        </text>
+        {Object.values(LANDMARKS).map((m) => (
+          <g key={m.label}>
+            <path d={`M${m.x} ${m.y - 1.2}l1.2 1.2-1.2 1.2-1.2-1.2Z`} fill="var(--ink-muted)" />
+            <text
+              x={m.x + LANDMARK_LABEL[m.label].dx}
+              y={m.y + LANDMARK_LABEL[m.label].dy}
+              textAnchor={LANDMARK_LABEL[m.label].anchor}
+              fontSize="2.2"
+              fontStyle="italic"
+              fill="var(--ink-muted)"
+              {...halo}
+            >
+              {m.label}
             </text>
           </g>
-        );
-      })}
-    </svg>
+        ))}
+
+        {/* The day's route: a paper halo under a line in the day's color; the walk in from the gate is dashed. */}
+        {legs.map((l) => (
+          <path key={`${l.key}-halo`} d={l.d} fill="none" stroke="var(--paper)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+        ))}
+        {legs.map((l) => (
+          <path
+            key={l.key}
+            d={l.d}
+            fill="none"
+            stroke="var(--el-line)"
+            strokeWidth="1.3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray={l.arrival ? "2.4 1.6" : undefined}
+          />
+        ))}
+
+        {/* The rope bridge: two rails across the water, over any route that uses it. */}
+        <path d="M67.5 31.1L71.6 27.8M68.4 32.2L72.5 28.9" stroke="var(--ink)" strokeWidth="0.5" strokeLinecap="round" />
+
+        <rect x={GATE.x - 4.5} y={GATE.y - 2.5} width="9" height="5" rx="1" fill="var(--ink)" />
+        <text x={GATE.x} y={GATE.y + 0.9} textAnchor="middle" fontSize="2.4" fill="var(--paper)" fontWeight="700">
+          GATE
+        </text>
+        {STAGES.map((s) => {
+          const p = STAGE_POS[s.name];
+          const order = stops.findIndex((o) => o.stage.name === s.name);
+          const on = order >= 0;
+          return (
+            <g key={s.name}>
+              <circle cx={p.x} cy={p.y} r="4.2" fill={on ? "var(--el)" : "var(--paper)"} stroke="var(--ink)" strokeWidth="0.6" />
+              <g transform={`translate(${p.x - 2.6} ${p.y - 2.6}) scale(0.108)`} style={{ color: on ? el.on : "var(--ink)" }}>
+                <g fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                  {EMBLEMS[s.nation]}
+                </g>
+              </g>
+              {on && (
+                <>
+                  <circle cx={p.x + 3.8} cy={p.y - 3.4} r="1.9" fill="var(--ink)" />
+                  <text x={p.x + 3.8} y={p.y - 2.65} textAnchor="middle" fontSize="2.2" fontWeight="700" fill="var(--paper)">
+                    {order + 1}
+                  </text>
+                </>
+              )}
+              <text x={p.x} y={p.y + 7} textAnchor="middle" fontSize="2.6" fontWeight={on ? 700 : 500} fill="var(--ink)" {...halo}>
+                {s.name}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Minutes on foot, halfway along each leg. */}
+        {pills.map((l) => (
+          <g key={`${l.key}-min`}>
+            <rect
+              x={l.at.x - 4.4}
+              y={l.at.y - 1.9}
+              width="8.8"
+              height="3.8"
+              rx="1.9"
+              fill={l.tight ? "var(--ink)" : "var(--paper)"}
+              stroke="var(--ink)"
+              strokeWidth="0.35"
+              strokeDasharray={l.tight ? undefined : "0.8 0.5"}
+            />
+            <text x={l.at.x} y={l.at.y + 0.85} textAnchor="middle" fontSize="2.2" fontWeight="700" fill={l.tight ? "var(--paper)" : "var(--ink)"}>
+              {l.minutes} min
+            </text>
+          </g>
+        ))}
+      </svg>
+      <figcaption className="mt-2 text-sm text-(--ink-muted)">
+        {stops.length === 0
+          ? "Dotted lines are the trails. Add a set and your route appears on them."
+          : "Your route follows the trails, dashed from the gate. Minutes are on foot; ink means a tight walk."}
+      </figcaption>
+    </figure>
   );
 }
 
@@ -1071,7 +1201,7 @@ export function NextUp({
   const mine = saved.filter((s) => s.day === day).sort((a, b) => slotMinutes(a.time) - slotMinutes(b.time));
   const next = mine.find((s) => slotMinutes(s.time) >= now);
   const before = [...mine].reverse().find((s) => slotMinutes(s.time) < now);
-  const from = before ? STAGE_POS[before.stage.name] : GATE;
+  const from: Place = before ? before.stage.name : "gate";
   const fromName = before ? before.stage.name : "the main gate";
 
   if (!next) {
@@ -1085,14 +1215,14 @@ export function NextUp({
         {idea && (
           <p className="mt-1 text-(--ink-muted)">
             Still restless? {idea.artist} plays {idea.stage.name} at {idea.time}, a{" "}
-            {walkMinutes(from, STAGE_POS[idea.stage.name])} min walk from {fromName}.
+            {walkMinutes(from, idea.stage.name)} min walk from {fromName}.
           </p>
         )}
       </div>
     );
   }
 
-  const walk = walkMinutes(from, STAGE_POS[next.stage.name]);
+  const walk = walkMinutes(from, next.stage.name);
   const start = slotMinutes(next.time);
   const leaveIn = start - walk - now;
   return (
@@ -1232,23 +1362,7 @@ export function FilterBar({ filters, onChange }: { filters: Filters; onChange: (
   const shown = LINEUP.filter((s) => matchesFilters(s, filters)).length;
   const countBy = (pick: (s: FestivalSet) => string, value: string) => LINEUP.filter((s) => pick(s) === value).length;
 
-  const chips: { key: string; label: string; remove: () => void }[] = [
-    ...[...filters.nations].map((n) => ({
-      key: `n-${n}`,
-      label: ELEMENTS[n].nation,
-      remove: () => onChange({ ...filters, nations: toggleIn(filters.nations, n) }),
-    })),
-    ...[...filters.stages].map((st) => ({
-      key: `s-${st}`,
-      label: st,
-      remove: () => onChange({ ...filters, stages: toggleIn(filters.stages, st) }),
-    })),
-    ...[...filters.genres].map((g) => ({
-      key: `g-${g}`,
-      label: g,
-      remove: () => onChange({ ...filters, genres: toggleIn(filters.genres, g) }),
-    })),
-  ];
+  const chips = filterChips(filters, onChange);
 
   return (
     <div>
@@ -1299,27 +1413,113 @@ export function FilterBar({ filters, onChange }: { filters: Filters; onChange: (
         </p>
       </div>
       {chips.length > 0 && (
-        <ul className="mt-3 flex flex-wrap items-center gap-2" aria-label="Active filters">
-          {chips.map((c) => (
-            <li key={c.key}>
-              <button
-                type="button"
-                onClick={c.remove}
-                aria-label={`Remove filter: ${c.label}`}
-                className={`inline-flex cursor-pointer items-center gap-1.5 border-[1.5px] border-(--ink) bg-(--ink) py-1 pr-2 pl-3 text-sm font-medium text-(--paper) ${SHAPE.button} ${FOCUS}`}
-              >
-                {c.label}
-                <CloseIcon className="h-3.5 w-3.5" />
-              </button>
-            </li>
-          ))}
-          <li>
-            <button type="button" onClick={() => onChange(noFilters())} className={`cursor-pointer text-sm ${LINK}`}>
-              Clear all
-            </button>
-          </li>
-        </ul>
+        <div className="mt-3">
+          <FilterChips chips={chips} onClear={() => onChange(noFilters())} />
+        </div>
       )}
+    </div>
+  );
+}
+
+// The active filters as removable ink chips, ending in "Clear all".
+export type ActiveFilter = { key: string; label: string; remove: () => void };
+
+export function filterChips(filters: Filters, onChange: (next: Filters) => void): ActiveFilter[] {
+  return [
+    ...[...filters.nations].map((n) => ({
+      key: `n-${n}`,
+      label: ELEMENTS[n].nation,
+      remove: () => onChange({ ...filters, nations: toggleIn(filters.nations, n) }),
+    })),
+    ...[...filters.stages].map((st) => ({
+      key: `s-${st}`,
+      label: st,
+      remove: () => onChange({ ...filters, stages: toggleIn(filters.stages, st) }),
+    })),
+    ...[...filters.genres].map((g) => ({
+      key: `g-${g}`,
+      label: g,
+      remove: () => onChange({ ...filters, genres: toggleIn(filters.genres, g) }),
+    })),
+  ];
+}
+
+export function FilterChips({ chips, onClear }: { chips: ActiveFilter[]; onClear: () => void }) {
+  if (chips.length === 0) return null;
+  return (
+    <ul className="flex flex-wrap items-center gap-2" aria-label="Active filters">
+      {chips.map((c) => (
+        <li key={c.key}>
+          <button
+            type="button"
+            onClick={c.remove}
+            aria-label={`Remove filter: ${c.label}`}
+            className={`inline-flex cursor-pointer items-center gap-1.5 border-[1.5px] border-(--ink) bg-(--ink) py-1 pr-2 pl-3 text-sm font-medium text-(--paper) ${SHAPE.button} ${FOCUS}`}
+          >
+            {c.label}
+            <CloseIcon className="h-3.5 w-3.5" />
+          </button>
+        </li>
+      ))}
+      <li>
+        <button type="button" onClick={onClear} className={`cursor-pointer text-sm ${LINK}`}>
+          Clear all
+        </button>
+      </li>
+    </ul>
+  );
+}
+
+// Every option at once, for a roomy panel: nation, stage, and genre as checklists with counts.
+export function FilterGroups({ filters, onChange }: { filters: Filters; onChange: (next: Filters) => void }) {
+  const countBy = (pick: (s: FestivalSet) => string, value: string) => LINEUP.filter((s) => pick(s) === value).length;
+  const groups = [
+    {
+      legend: "Nation",
+      options: ELEMENT_ORDER.map((n) => ({
+        key: n,
+        checked: filters.nations.has(n),
+        onChange: () => onChange({ ...filters, nations: toggleIn(filters.nations, n) }),
+        icon: <NationMark nation={n} />,
+        name: ELEMENTS[n].nation,
+        count: countBy((s) => s.nation, n),
+      })),
+    },
+    {
+      legend: "Stage",
+      options: STAGES.map((st) => ({
+        key: st.name,
+        checked: filters.stages.has(st.name),
+        onChange: () => onChange({ ...filters, stages: toggleIn(filters.stages, st.name) }),
+        icon: <NationMark nation={st.nation} />,
+        name: st.name,
+        count: countBy((s) => s.stage.name, st.name),
+      })),
+    },
+    {
+      legend: "Genre",
+      options: GENRES.map((g) => ({
+        key: g,
+        checked: filters.genres.has(g),
+        onChange: () => onChange({ ...filters, genres: toggleIn(filters.genres, g) }),
+        icon: undefined,
+        name: g,
+        count: countBy((s) => s.genre, g),
+      })),
+    },
+  ];
+  return (
+    <div className="grid gap-6 sm:grid-cols-3">
+      {groups.map((g) => (
+        <fieldset key={g.legend} className="min-w-0">
+          <legend className={`${TYPE.label} text-(--ink-muted)`}>{g.legend}</legend>
+          <ul className="mt-3 space-y-2.5">
+            {g.options.map(({ key, ...o }) => (
+              <Option key={key} {...o} />
+            ))}
+          </ul>
+        </fieldset>
+      ))}
     </div>
   );
 }

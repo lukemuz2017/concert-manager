@@ -68,7 +68,7 @@ function PosterName({
       onMouseEnter={(e) => onHover(e.currentTarget)}
       onMouseLeave={onLeave}
       onClick={(e) => onPick(e.currentTarget)}
-      className={`inline-flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-0.5 text-left underline decoration-[3px] underline-offset-[6px] transition-[background-color,opacity] duration-(--el-dur) hover:bg-(--paper) hover:decoration-wavy hover:opacity-100 ${FOCUS} ${dim ? "opacity-25" : ""} ${active ? "bg-(--paper) decoration-wavy" : ""} ${type}`}
+      className={`inline-flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-0.5 text-left underline decoration-[3px] underline-offset-[6px] transition-[background-color,opacity] duration-(--el-dur) hover:bg-(--paper) hover:decoration-wavy hover:underline-offset-[10px] hover:opacity-100 ${FOCUS} ${dim ? "opacity-25" : ""} ${active ? "bg-(--paper) decoration-wavy underline-offset-[10px]!" : ""} ${type}`}
       style={{ textDecorationColor: el.line }}
     >
       <span style={{ color: el.line }} className="self-start pt-[0.2em]">
@@ -134,24 +134,70 @@ function NamePopover({
     if (!el.matches(":popover-open")) el.showPopover();
     const anchor = picked.anchor;
 
+    // Put the card beside the name and never on it: below, above, right, or left, the first
+    // side where the whole card fits. If none does, take the roomier of above and below and
+    // let the card scroll inside itself. On a phone it is a sheet at the bottom, or at the
+    // top when the name sits low on the screen.
     function place() {
       if (!el) return;
+      const GAP = 8;
+      const M = 8;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const a = anchor.getBoundingClientRect();
+      el.style.maxHeight = "none";
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
+      const roomBelow = vh - a.bottom - GAP;
+      const roomAbove = a.top - GAP;
+
       if (window.matchMedia("(max-width: 639px)").matches) {
-        Object.assign(el.style, { left: "0px", right: "0px", top: "auto", bottom: "0px" });
+        const atTop = h > roomBelow && roomAbove > roomBelow;
+        Object.assign(el.style, {
+          left: "0px",
+          right: "0px",
+          top: atTop ? "0px" : "auto",
+          bottom: atTop ? "auto" : "0px",
+          maxHeight: `${Math.max(160, atTop ? roomAbove : roomBelow)}px`,
+        });
         return;
       }
-      const a = anchor.getBoundingClientRect();
-      const left = Math.min(Math.max(8, a.left + a.width / 2 - el.offsetWidth / 2), window.innerWidth - el.offsetWidth - 8);
-      const below = a.bottom + 6;
-      const top = below + el.offsetHeight > window.innerHeight - 8 ? Math.max(8, a.top - el.offsetHeight - 6) : below;
-      Object.assign(el.style, { left: `${left}px`, top: `${top}px`, right: "auto", bottom: "auto" });
+
+      const clampX = (x: number) => Math.min(Math.max(M, x), vw - w - M);
+      const clampY = (y: number) => Math.min(Math.max(M, y), vh - h - M);
+      const midX = clampX(a.left + a.width / 2 - w / 2);
+      const midY = clampY(a.top + a.height / 2 - h / 2);
+      const tallEnough = h <= vh - 2 * M;
+      const sides = [
+        { fits: roomBelow - M >= h, left: midX, top: a.bottom + GAP },
+        { fits: roomAbove - M >= h, left: midX, top: a.top - GAP - h },
+        { fits: tallEnough && a.right + GAP + w <= vw - M, left: a.right + GAP, top: midY },
+        { fits: tallEnough && a.left - GAP - w >= M, left: a.left - GAP - w, top: midY },
+      ];
+      const side = sides.find((o) => o.fits);
+      if (side) {
+        Object.assign(el.style, { left: `${side.left}px`, top: `${side.top}px`, right: "auto", bottom: "auto" });
+        return;
+      }
+      const below = roomBelow >= roomAbove;
+      const room = Math.max(120, (below ? roomBelow : roomAbove) - M);
+      Object.assign(el.style, {
+        left: `${midX}px`,
+        top: below ? `${a.bottom + GAP}px` : `${a.top - GAP - Math.min(h, room)}px`,
+        right: "auto",
+        bottom: "auto",
+        maxHeight: `${room}px`,
+      });
     }
 
     place();
     if (picked.via === "click") el.querySelector<HTMLElement>("button[aria-pressed]")?.focus();
+    const resized = new ResizeObserver(() => place());
+    resized.observe(el.firstElementChild ?? el);
     window.addEventListener("scroll", place, true);
     window.addEventListener("resize", place);
     return () => {
+      resized.disconnect();
       window.removeEventListener("scroll", place, true);
       window.removeEventListener("resize", place);
     };
@@ -167,7 +213,7 @@ function NamePopover({
       aria-labelledby={titleId}
       onMouseEnter={onKeepOpen}
       onMouseLeave={onLeave}
-      className={`inset-auto m-0 w-full overflow-hidden border-[1.5px] border-(--ink) bg-(--paper) p-0 text-(--ink) sm:w-80 ${SHAPE.card}`}
+      className={`inset-auto m-0 w-full overflow-y-auto overscroll-contain border-[1.5px] border-(--ink) bg-(--paper) p-0 text-(--ink) sm:w-80 ${SHAPE.card}`}
     >
       {set && day && (
         <div className="p-5">
@@ -212,12 +258,15 @@ export function LineupPoster({
   flagged,
   onFlag,
   filters,
+  shown,
 }: {
   saved: Set<string>;
   onToggle: (artist: string) => void;
   flagged?: Set<string>;
   onFlag?: (artist: string) => void;
   filters?: Filters;
+  // Any wider test of who matches (search, journey, clashes). Non-matches fade back.
+  shown?: (set: FestivalSet) => boolean;
 }) {
   const [picked, setPicked] = useState<Picked | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -247,7 +296,7 @@ export function LineupPoster({
       flagged={!!flagged?.has(set.artist)}
       clash={saved.has(set.artist) && clashesWith(set, savedList).length > 0}
       active={picked?.set === set}
-      dim={!!filters && filtersActive(filters) && !matchesFilters(set, filters)}
+      dim={(!!filters && filtersActive(filters) && !matchesFilters(set, filters)) || (!!shown && !shown(set))}
       onHover={(anchor) => hover(set, anchor)}
       onLeave={scheduleClose}
       onPick={(anchor) => {
@@ -262,7 +311,9 @@ export function LineupPoster({
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className={TYPE.display}>The Four Nations</p>
-          <p className="mt-1 text-sm font-medium tracking-[0.5em] uppercase">Music Festival · Thu–Sun</p>
+          <p className="mt-1 text-sm font-medium tracking-[0.5em] uppercase">
+            Music Festival · <span className="whitespace-nowrap">Thu–Sun</span>
+          </p>
         </div>
         <ul aria-label="Nations" className="flex flex-wrap gap-x-4 gap-y-1 text-sm font-medium">
           {DAY_ORDER.map((n) => (
@@ -281,8 +332,9 @@ export function LineupPoster({
         return (
           <section
             key={day}
+            data-day={day}
             aria-label={`${el.dayName} lineup`}
-            className="mt-6 grid gap-x-8 gap-y-4 md:grid-cols-[minmax(0,19rem)_1fr] md:items-center"
+            className="mt-6 grid scroll-mt-36 lg:scroll-mt-24 gap-x-8 gap-y-4 md:grid-cols-[minmax(0,19rem)_1fr] md:items-center"
           >
             {/* The day, plastered across the top of its band in the day's element color. */}
             <h4
@@ -294,7 +346,7 @@ export function LineupPoster({
             </h4>
             {/* Headliners share one right edge, like the poster's name column. */}
             <div className="flex flex-col md:items-end">
-              <ul className="flex flex-col gap-2.5 md:items-end">
+              <ul className="flex flex-col gap-3.5 md:items-end">
                 {headliners.map((s) => (
                   <li key={s.artist} className="md:flex md:justify-end">
                     {name(s, "headliner")}

@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   title: "Four Nations design system",
 };
 
-const LINK = `rounded-sm font-medium underline decoration-(--el-line) decoration-2 underline-offset-[5px] hover:decoration-wavy focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-(--ink)`;
+const LINK = `rounded-sm font-medium underline decoration-(--el-line) decoration-2 underline-offset-[5px] hover:decoration-wavy hover:underline-offset-[8px] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-(--ink)`;
 const NUMERALS = ["一", "二", "三", "四", "五", "六", "七"];
 
 /* 一 · Color ------------------------------------------------------------------ */
