@@ -152,7 +152,7 @@ export function LiveComponents() {
     <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
       <Panel
         title="Lineup: search, filters & poster"
-        note="All 100 artists, a band per day, each name in its nation's emblem and underline. Search, or open Filters for nation, stage, genre, time, and clashes; applied filters become chips, and everyone else fades back. Rest on a name, or click it, for the time, the stage, and the add and Interested buttons."
+        note="All 100 artists, a band per day, each name in its nation's emblem and underline. Search, or open Filters for nation, stage, genre, time, and clashes; applied filters become chips, and everyone else fades back. Pointing at a name highlights it; click it for the time, the stage, and the add and Interested buttons."
         className="lg:col-span-2"
       >
         <h3 className={TYPE.heading}>The lineup</h3>

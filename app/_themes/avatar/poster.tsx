@@ -25,10 +25,10 @@ import {
 // The lineup as a festival poster, a day per band: the day tag and headliners
 // large on the left, everyone else flowing on the right. Every name carries its
 // nation's emblem and an underline in the nation's color; the name stays ink so
-// it can always be read. Hover a name (or click or press Enter on it) for the
-// show time, the stage, and the add button.
+// it can always be read. Pointing at a name highlights it; clicking it (or pressing
+// Enter on it) opens the show time, the stage, and the add button.
 
-type Picked = { set: FestivalSet; anchor: HTMLElement; via: "hover" | "click" };
+type Picked = { set: FestivalSet; anchor: HTMLElement };
 
 function PosterName({
   set,
@@ -38,8 +38,6 @@ function PosterName({
   clash,
   active,
   dim,
-  onHover,
-  onLeave,
   onPick,
 }: {
   set: FestivalSet;
@@ -49,8 +47,6 @@ function PosterName({
   clash: boolean;
   active: boolean;
   dim: boolean;
-  onHover: (anchor: HTMLElement) => void;
-  onLeave: () => void;
   onPick: (anchor: HTMLElement) => void;
 }) {
   const el = ELEMENTS[set.nation];
@@ -66,8 +62,6 @@ function PosterName({
       type="button"
       aria-haspopup="dialog"
       aria-expanded={active}
-      onMouseEnter={(e) => onHover(e.currentTarget)}
-      onMouseLeave={onLeave}
       onClick={(e) => onPick(e.currentTarget)}
       className={`inline-flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-0.5 text-left underline decoration-[3px] underline-offset-[6px] transition-[background-color,opacity] duration-(--el-dur) hover:bg-(--paper) hover:decoration-wavy hover:underline-offset-[10px] hover:opacity-100 ${FOCUS} ${dim ? "opacity-25" : ""} ${active ? "bg-(--paper) decoration-wavy underline-offset-[10px]!" : ""} ${type}`}
       style={{ textDecorationColor: el.line }}
@@ -85,7 +79,7 @@ function PosterName({
 }
 
 // The pop-up. A native popover: top layer, Escape and outside clicks close it.
-// Opened by hover it never steals focus; opened by click it moves focus inside.
+// Opening it moves focus inside, to its first action.
 function NamePopover({
   picked,
   saved,
@@ -94,8 +88,6 @@ function NamePopover({
   onToggle,
   onFlag,
   onClose,
-  onKeepOpen,
-  onLeave,
 }: {
   picked: Picked | null;
   saved: boolean;
@@ -104,8 +96,6 @@ function NamePopover({
   onToggle: () => void;
   onFlag: () => void;
   onClose: () => void;
-  onKeepOpen: () => void;
-  onLeave: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -192,7 +182,7 @@ function NamePopover({
     }
 
     place();
-    if (picked.via === "click") el.querySelector<HTMLElement>("button[aria-pressed]")?.focus();
+    el.querySelector<HTMLElement>("button[aria-pressed]")?.focus();
     const resized = new ResizeObserver(() => place());
     resized.observe(el.firstElementChild ?? el);
     window.addEventListener("scroll", place, true);
@@ -212,8 +202,6 @@ function NamePopover({
       popover="auto"
       role="dialog"
       aria-labelledby={titleId}
-      onMouseEnter={onKeepOpen}
-      onMouseLeave={onLeave}
       className={`inset-auto m-0 w-full overflow-y-auto overscroll-contain border-[1.5px] border-(--ink) bg-(--paper) p-0 text-(--ink) sm:w-80 ${SHAPE.card}`}
     >
       {set && day && (
@@ -288,47 +276,7 @@ export function LineupPoster({
   titled?: boolean;
 }) {
   const [picked, setPicked] = useState<Picked | null>(null);
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedList = LINEUP.filter((s) => saved.has(s.artist));
-
-  const cancelClose = () => {
-    if (closeTimer.current) clearTimeout(closeTimer.current);
-    closeTimer.current = null;
-  };
-  // Hover-opened pop-ups close shortly after the pointer leaves, so it can travel into them.
-  const scheduleClose = () => {
-    cancelClose();
-    closeTimer.current = setTimeout(() => setPicked((p) => (p?.via === "hover" ? null : p)), 220);
-  };
-  const cancelOpen = () => {
-    if (openTimer.current) clearTimeout(openTimer.current);
-    openTimer.current = null;
-  };
-  // Hovering opens the pop-up only once the pointer has rested on a name for half a
-  // second, so names passing under the pointer while you scroll stay quiet.
-  const hover = (set: FestivalSet, anchor: HTMLElement) => {
-    cancelClose();
-    cancelOpen();
-    openTimer.current = setTimeout(() => {
-      openTimer.current = null;
-      setPicked((p) => (p?.via === "click" && p.set === set ? p : { set, anchor, via: "hover" }));
-    }, 500);
-  };
-  const leave = () => {
-    cancelOpen();
-    scheduleClose();
-  };
-
-  // Any scroll cancels a pop-up that is still waiting to open.
-  useEffect(() => {
-    window.addEventListener("scroll", cancelOpen, true);
-    return () => {
-      window.removeEventListener("scroll", cancelOpen, true);
-      clearTimeout(closeTimer.current ?? undefined);
-      clearTimeout(openTimer.current ?? undefined);
-    };
-  }, []);
 
   const name = (set: FestivalSet, size: "headliner" | "major" | "minor") => (
     <PosterName
@@ -339,13 +287,7 @@ export function LineupPoster({
       clash={saved.has(set.artist) && clashesWith(set, savedList).length > 0}
       active={picked?.set === set}
       dim={(!!filters && filtersActive(filters) && !matchesFilters(set, filters)) || (!!shown && !shown(set))}
-      onHover={(anchor) => hover(set, anchor)}
-      onLeave={leave}
-      onPick={(anchor) => {
-        cancelOpen();
-        cancelClose();
-        setPicked({ set, anchor, via: "click" });
-      }}
+      onPick={(anchor) => setPicked({ set, anchor })}
     />
   );
 
@@ -424,8 +366,6 @@ export function LineupPoster({
         onToggle={() => picked && onToggle(picked.set.artist)}
         onFlag={() => picked && onFlag?.(picked.set.artist)}
         onClose={() => setPicked(null)}
-        onKeepOpen={cancelClose}
-        onLeave={scheduleClose}
       />
     </div>
   );
