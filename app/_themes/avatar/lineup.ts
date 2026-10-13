@@ -114,11 +114,15 @@ const PER_DAY: Record<ElementKey, Record<ElementKey, number>> = {
   air: { water: 6, earth: 5, fire: 6, air: 5 },
 };
 
-// Slots fill from the top of the bill: 3 at 8:30, then 5, 5, 4, 4, 4.
+// Slots fill from the top of the bill: 3 at 8:30, then 5, 5, 4, 4, 4. The three headliners
+// take one each of 8:30, 7:00, and 5:30.
 const BILL: Slot[] = [
-  ...Array<Slot>(3).fill("8:30 PM"),
-  ...Array<Slot>(5).fill("7:00 PM"),
-  ...Array<Slot>(5).fill("5:30 PM"),
+  "8:30 PM",
+  "7:00 PM",
+  "5:30 PM",
+  ...Array<Slot>(2).fill("8:30 PM"),
+  ...Array<Slot>(4).fill("7:00 PM"),
+  ...Array<Slot>(4).fill("5:30 PM"),
   ...Array<Slot>(4).fill("4:00 PM"),
   ...Array<Slot>(4).fill("2:30 PM"),
   ...Array<Slot>(4).fill("1:00 PM"),
@@ -167,8 +171,10 @@ function buildLineup(): FestivalSet[] {
 export const LINEUP = buildLineup();
 
 // 8:30 sets headline; billing comes from the slot.
+const HEADLINER_NAMES = new Set(Object.values(HEADLINERS).flatMap((list) => list.map(([artist]) => artist)));
+
 export function isHeadliner(set: FestivalSet) {
-  return set.time === "8:30 PM";
+  return HEADLINER_NAMES.has(set.artist);
 }
 
 // Other saved sets on the same day and in the same slot.
