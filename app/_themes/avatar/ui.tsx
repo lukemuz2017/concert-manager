@@ -19,6 +19,10 @@ import {
 import {
   GATE,
   GENRES,
+  FALLS,
+  GORGE,
+  LAKE,
+  OUTFLOW,
   LANDMARKS,
   legBetween,
   LINEUP,
@@ -30,6 +34,7 @@ import {
   STAGES,
   TIGHT_WALK,
   trailPath,
+  trailPoints,
   TRAILS,
   walkMinutes,
   type FestivalSet,
@@ -227,6 +232,18 @@ export function SearchIcon({ className = "h-4 w-4" }: { className?: string }) {
     <svg aria-hidden="true" viewBox="0 0 16 16" className={`shrink-0 ${className}`}>
       <circle cx="6.8" cy="6.8" r="4.6" fill="none" stroke="currentColor" strokeWidth="1.8" />
       <path d="M10.3 10.4c1.2 1.1 2.4 2.3 3.5 3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+// Three sliders: the filters.
+export function FilterIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" className={`shrink-0 ${className}`} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <path d="M2 4h12M2 8h12M2 12h12" />
+      <circle cx="10.5" cy="4" r="1.7" fill="currentColor" />
+      <circle cx="5.5" cy="8" r="1.7" fill="currentColor" />
+      <circle cx="9" cy="12" r="1.7" fill="currentColor" />
     </svg>
   );
 }
@@ -1033,6 +1050,22 @@ export function JourneyMap({ day, saved }: { day: ElementKey; saved: FestivalSet
           .join(", then ")}. ${legs.map((l) => `${l.minutes} min`).join(", ")} on foot.`;
   const halo = { paintOrder: "stroke" as const, stroke: "var(--paper)", strokeWidth: 0.9, strokeLinejoin: "round" as const };
 
+  // The cliff edge follows the cliff path a little below it, closing in to meet the gorge
+  // bridge, in two runs either side of the gorge.
+  // A fixed scatter (not random, so the map draws the same every time) roughens the rock.
+  const rough = (i: number) => ((i * 37) % 11) / 10;
+  const [westCliff, eastCliff] = TRAILS.filter((t) => t.name === "Cliff path");
+  const edge = [...trailPoints(westCliff, 34, 0.18, 1), ...trailPoints(eastCliff, 26, 0, 0.82)].map((p, i) => {
+    const near = Math.min(1, Math.abs(p.x - GORGE.x) / 7);
+    return {
+      x: p.x,
+      y: p.y + 0.6 + near * 2.4 + rough(i) * 0.8,
+      drop: 0.7 + rough(i + 4) * 1.7,
+      lean: (rough(i + 7) - 0.5) * 0.7,
+    };
+  });
+  const cliff = [edge.filter((p) => p.x < GORGE.x - 2.8), edge.filter((p) => p.x > GORGE.x + 2.8)];
+
   // Each minutes label slides sideways off its trail to wherever it covers the least:
   // stage circles and names, landmark names, the gate, and the labels already placed.
   const taken: Box[] = [
@@ -1076,18 +1109,69 @@ export function JourneyMap({ day, saved }: { day: ElementKey; saved: FestivalSet
           <path d="M2 22c14-6 24 4 38-2s22-12 36-6 18 4 22 2" />
           <path d="M2 56c12 4 20-6 34-2s20 10 34 4 20-6 28-2" />
         </g>
-        {/* The river, from its spring under the cliffs to the east edge. */}
-        <path d={RIVER} fill="none" stroke={ELEMENTS.water.wash} strokeWidth="3.2" strokeLinecap="round" />
-        <path d={RIVER} fill="none" stroke={ELEMENTS.water.line} strokeWidth="0.3" strokeDasharray="2 2.5" opacity="0.6" />
+        {/* The lake around Ember Island, with a few ripples, and the island itself. */}
+        <ellipse cx={LAKE.x} cy={LAKE.y} rx={LAKE.rx} ry={LAKE.ry} fill={ELEMENTS.water.wash} />
+        <ellipse cx={LAKE.x} cy={LAKE.y} rx={LAKE.rx} ry={LAKE.ry} fill="none" stroke={ELEMENTS.water.line} strokeWidth="0.3" opacity="0.6" />
+        <g fill="none" stroke={ELEMENTS.water.line} strokeWidth="0.3" strokeLinecap="round" opacity="0.7">
+          <path d={`M${LAKE.x - 7.4} ${LAKE.y + 2.4}q1-0.9 2 0t2 0`} />
+          <path d={`M${LAKE.x + 4.2} ${LAKE.y - 3.6}q1-0.9 2 0t2 0`} />
+          <path d={`M${LAKE.x + 3.2} ${LAKE.y + 4.4}q1-0.9 2 0`} />
+        </g>
+        <ellipse cx={STAGE_POS["Ember Island"].x} cy={STAGE_POS["Ember Island"].y + 0.2} rx="5" ry="4.9" fill="var(--paper)" stroke="var(--ink-muted)" strokeWidth="0.25" />
+
+        {/* The river, from the top edge, over the falls, under the rope bridge, and out east. */}
+        {[RIVER, OUTFLOW].map((d) => (
+          <g key={d}>
+            <path d={d} fill="none" stroke={ELEMENTS.water.wash} strokeWidth="3.2" />
+            <path d={d} fill="none" stroke={ELEMENTS.water.line} strokeWidth="0.3" strokeDasharray="2 2.5" opacity="0.6" />
+          </g>
+        ))}
+
+        {/* The cliffs: a hatched edge just below the cliff path, broken where the river falls. */}
+        <g fill="none" stroke="var(--ink-muted)" strokeWidth="0.3" strokeLinecap="round">
+          {cliff.map((run, r) => (
+            <g key={r}>
+              <path d={`M${run.map((p) => `${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join("L")}`} strokeWidth="0.4" />
+              {run.map((p, i) => (
+                <path
+                  key={i}
+                  d={`M${(p.x - 0.35).toFixed(2)} ${p.y.toFixed(2)}l${(0.35 + p.lean).toFixed(2)} ${p.drop.toFixed(2)}L${(p.x + 0.35).toFixed(2)} ${p.y.toFixed(2)}Z`}
+                  fill="var(--ink-muted)"
+                  stroke="none"
+                  opacity="0.75"
+                />
+              ))}
+            </g>
+          ))}
+        </g>
+        {/* The falls: white water where the river drops over the edge. */}
+        <g stroke="var(--paper)" strokeWidth="0.35" strokeLinecap="round">
+          <path d={`M${FALLS.x - 1} ${FALLS.y - 0.6}h2M${FALLS.x - 0.8} ${FALLS.y + 0.6}h1.6M${FALLS.x - 0.6} ${FALLS.y + 1.8}h1.4`} />
+        </g>
+
+        {/* Causeways: wherever a trail crosses water, the ground shows through beneath it. */}
+        <g fill="none" stroke="var(--paper)" strokeWidth="1.5">
+          {TRAILS.map((t) => (
+            <path key={`${t.from}-${t.to}`} d={trailPath(t)} />
+          ))}
+        </g>
         {/* Every trail on the grounds: a dotted footpath. */}
         <g fill="none" stroke="var(--ink-muted)" strokeWidth="0.55" strokeLinecap="round" strokeDasharray="0.1 1.3">
           {TRAILS.map((t) => (
             <path key={`${t.from}-${t.to}`} d={trailPath(t)} />
           ))}
         </g>
-        <text x="49" y="8.6" textAnchor="middle" fontSize="2.2" fontStyle="italic" fill="var(--ink-muted)" {...halo}>
+        <text x="40" y="2.9" textAnchor="middle" fontSize="2.2" fontStyle="italic" fill="var(--ink-muted)" {...halo}>
           Cliff path
         </text>
+        {/* The gorge bridge: rails and planks from one cliff edge to the other, over the falls. */}
+        <g stroke="var(--ink)" strokeLinecap="round">
+          <path d={`M${GORGE.x - 3.2} ${GORGE.y - 0.8}h6.4M${GORGE.x - 3.2} ${GORGE.y + 0.8}h6.4`} strokeWidth="0.4" />
+          <path
+            d={[-2.4, -1.2, 0, 1.2, 2.4].map((dx) => `M${GORGE.x + dx} ${GORGE.y - 0.8}v1.6`).join("")}
+            strokeWidth="0.3"
+          />
+        </g>
         {Object.values(LANDMARKS).map((m) => (
           <g key={m.label}>
             <path d={`M${m.x} ${m.y - 1.2}l1.2 1.2-1.2 1.2-1.2-1.2Z`} fill="var(--ink-muted)" />

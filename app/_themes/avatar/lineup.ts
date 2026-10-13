@@ -189,21 +189,29 @@ export const STAGE_POS: Record<Stage["name"], Point> = {
   "Spirit Oasis": { x: 84, y: 10 },
   "Wan Shi Tong's Library": { x: 20, y: 40 },
   "Crystal Catacombs": { x: 50, y: 28 },
-  "Royal Caldera": { x: 82, y: 44 },
-  "Ember Island": { x: 64, y: 56 },
+  "Royal Caldera": { x: 64, y: 56 },
+  "Ember Island": { x: 83, y: 45 },
 };
 
-// Where trails meet. The river runs from a spring below the cliffs, under the rope
-// bridge, and out east, so the Spirit Oasis is reached by the bridge or the cliff path.
+// Where trails meet. The river comes in at the top edge, drops through a gorge in the
+// cliffs (the cliff path crosses it on a bridge between the two cliff edges), runs under
+// the rope bridge into the lake around Ember Island, and leaves by the east edge.
 export const LANDMARKS = {
   market: { x: 50, y: 48, label: "Market" },
   teaHouse: { x: 32, y: 24, label: "Tea house" },
   bridge: { x: 70, y: 30, label: "Rope bridge" },
 } as const;
-export const RIVER = "M62 13C64 20 66 25 70 30S86 36 100 39";
+export const RIVER = "M59.5 0C60 3 60.2 5 60.3 7.5S61.5 12 62 14C64 20 66 25 70 30S79 36 80 40";
+// The river leaves the lake for the east edge.
+export const OUTFLOW = "M93 47.5C95 48 97.5 48.4 100 48.6";
+// The gorge where the river cuts the cliffs, and the falls just below its bridge.
+export const GORGE = { x: 60.3, y: 6.6 };
+export const FALLS = { x: 60.6, y: 9.4 };
+// Ember Island is an island: the stage sits in a lake the river runs through.
+export const LAKE = { x: 83, y: 45.5, rx: 10.8, ry: 7.6 };
 
-type Node = Place | keyof typeof LANDMARKS;
-const NODE_POS: Record<Node, Point> = { gate: GATE, ...STAGE_POS, ...LANDMARKS };
+type Node = Place | keyof typeof LANDMARKS | "gorge";
+const NODE_POS: Record<Node, Point> = { gate: GATE, ...STAGE_POS, ...LANDMARKS, gorge: GORGE };
 
 // Each trail bends a little: `bend` pushes its middle sideways, in map units.
 export const TRAILS: { from: Node; to: Node; bend: number; name?: string }[] = [
@@ -218,7 +226,8 @@ export const TRAILS: { from: Node; to: Node; bend: number; name?: string }[] = [
   { from: "Crystal Catacombs", to: "teaHouse", bend: -2 },
   { from: "teaHouse", to: "Western Air Temple", bend: 2 },
   { from: "teaHouse", to: "Wan Shi Tong's Library", bend: 3 },
-  { from: "Western Air Temple", to: "Spirit Oasis", bend: -14, name: "Cliff path" },
+  { from: "Western Air Temple", to: "gorge", bend: -6, name: "Cliff path" },
+  { from: "gorge", to: "Spirit Oasis", bend: -5, name: "Cliff path" },
 ];
 
 // A trail is a quadratic curve; its control point sits off the midpoint by `bend`.
@@ -256,6 +265,14 @@ export function trailPath(t: (typeof TRAILS)[number]) {
   const b = NODE_POS[t.to];
   const c = control(a, b, t.bend);
   return `M${a.x} ${a.y}Q${c.x.toFixed(2)} ${c.y.toFixed(2)} ${b.x} ${b.y}`;
+}
+
+// Evenly spaced points along a trail, from `t0` to `t1` of the way, for drawing beside it.
+export function trailPoints(t: (typeof TRAILS)[number], n: number, t0 = 0, t1 = 1): Point[] {
+  const a = NODE_POS[t.from];
+  const b = NODE_POS[t.to];
+  const c = control(a, b, t.bend);
+  return Array.from({ length: n }, (_, i) => along(a, c, b, t0 + ((t1 - t0) * i) / (n - 1)));
 }
 
 // The shortest way along the trails between two places. The graph is tiny, so a
