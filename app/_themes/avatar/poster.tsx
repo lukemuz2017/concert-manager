@@ -3,7 +3,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type Ref } from "react";
 
 import { clashesWith, DAY_ORDER, isHeadliner, LINEUP, SLOTS, type FestivalSet } from "./lineup";
-import { ELEMENTS, SHAPE, TYPE } from "./tokens";
+import { ELEMENTS, elementVars, SHAPE, TYPE } from "./tokens";
 import {
   AddButton,
   CheckIcon,
@@ -55,9 +55,9 @@ function PosterName({
   const el = ELEMENTS[set.nation];
   // Headliners sit at 32px so a name fits on one or two lines; the rest are 20px and 17px.
   const type = {
-    headliner: `${TYPE.heading.replace("text-2xl", "text-[28px] sm:text-[34px]")} leading-[1.5]! uppercase md:flex-row-reverse md:text-right`,
-    major: "text-base sm:text-xl font-bold uppercase tracking-wide leading-tight",
-    minor: "text-sm sm:text-[17px] font-bold uppercase tracking-wide leading-tight",
+    headliner: `${TYPE.heading.replace("text-2xl", "text-[22px] sm:text-[26px]")} leading-[1.5]! uppercase md:flex-row-reverse md:text-right`,
+    major: "text-sm sm:text-[17px] font-bold uppercase tracking-wide leading-tight",
+    minor: "text-[13px] sm:text-[15px] font-bold uppercase tracking-wide leading-tight",
   }[size];
   const emblem = size === "headliner" ? "h-7 w-7" : size === "major" ? "h-5 w-5" : "h-[18px] w-[18px]";
   return (
@@ -242,7 +242,10 @@ function NamePopover({
             </p>
           )}
           <div className="mt-4 flex flex-wrap items-center gap-3">
-            <AddButton added={saved} onToggle={onToggle} />
+            {/* The add button wears the artist's nation: its color and the way it moves. */}
+            <span className="contents" style={elementVars(set.nation)}>
+              <AddButton added={saved} onToggle={onToggle} />
+            </span>
             {/* Interested is lighter than a plan: it marks a set without committing the hour. */}
             <FlagButton flagged={flagged} onToggle={onFlag} artist={set.artist} />
           </div>
@@ -261,6 +264,7 @@ export function LineupPoster({
   shown,
   boxed = false,
   boxRef,
+  titled = !boxed,
 }: {
   saved: Set<string>;
   onToggle: (artist: string) => void;
@@ -273,6 +277,8 @@ export function LineupPoster({
   // the frame while you read that day, and the festival title is left to the page.
   boxed?: boolean;
   boxRef?: Ref<HTMLDivElement>;
+  // The festival title atop the poster; leave it off where the page already shows it.
+  titled?: boolean;
 }) {
   const [picked, setPicked] = useState<Picked | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -345,7 +351,7 @@ export function LineupPoster({
       className={`border-[1.5px] border-(--ink) bg-(--parchment) px-4 py-6 sm:px-8 sm:py-8 ${SHAPE.card} ${boxed ? `relative max-h-[calc(100dvh-19rem)] scroll-mt-[18.5rem] overflow-y-auto [scrollbar-color:var(--line)_transparent] [scrollbar-width:thin] lg:max-h-[calc(100dvh-13rem)] lg:scroll-mt-[12rem] ${FOCUS}` : ""}`}
     >
       <div className="flex flex-wrap items-end justify-between gap-4">
-        {!boxed && (
+        {titled && (
           <div>
             <p className={TYPE.display}>The Four Nations</p>
             <p className="mt-1 text-sm font-medium tracking-[0.5em] uppercase">
@@ -372,19 +378,19 @@ export function LineupPoster({
             key={day}
             data-day={day}
             aria-label={`${el.dayName} lineup`}
-            className="mt-6 grid scroll-mt-36 lg:scroll-mt-24 gap-x-8 gap-y-4 md:grid-cols-[minmax(0,19rem)_1fr] md:items-center"
+            className="mt-5 grid scroll-mt-[18.5rem] lg:scroll-mt-[11.5rem] gap-x-8 gap-y-3 md:grid-cols-[minmax(0,19rem)_1fr] md:items-center"
           >
             {/* The day, plastered across the top of its band in the day's element color. */}
             <h4
-              className={`${TYPE.display} flex items-center justify-between gap-4 px-4 py-1.5 uppercase md:col-span-2 ${boxed ? "sticky -top-6 z-10 sm:-top-8" : ""}`}
+              className={`${TYPE.display} text-[30px]! sm:text-[38px]! flex items-center justify-between gap-4 px-4 py-1 uppercase md:col-span-2 ${boxed ? "sticky -top-6 z-10 sm:-top-8" : ""}`}
               style={{ background: el.fill, color: el.on }}
             >
               {el.dayName}
-              <Emblem element={day} className="h-9 w-9 sm:h-11 sm:w-11" />
+              <Emblem element={day} className="h-7 w-7 sm:h-8 sm:w-8" />
             </h4>
             {/* Headliners share one right edge, like the poster's name column. */}
             <div className="flex flex-col md:items-end">
-              <ul className="flex flex-col gap-3.5 md:items-end">
+              <ul className="flex flex-col gap-2.5 md:items-end">
                 {headliners.map((s) => (
                   <li key={s.artist} className="md:flex md:justify-end">
                     {name(s, "headliner")}
@@ -392,7 +398,7 @@ export function LineupPoster({
                 ))}
               </ul>
             </div>
-            <ul className="flex flex-wrap content-center items-center gap-x-2 gap-y-2 sm:gap-x-4 sm:gap-y-3">
+            <ul className="flex flex-wrap content-center items-center gap-x-2 gap-y-1.5 sm:gap-x-3.5 sm:gap-y-2">
               {rest
                 .sort((a, b) => SLOTS.indexOf(b.time) - SLOTS.indexOf(a.time))
                 .map((s) => (

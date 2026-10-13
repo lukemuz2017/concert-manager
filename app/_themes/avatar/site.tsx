@@ -10,7 +10,7 @@ import festivalPoster from "@/app/mood-boards/avatar/images/festival-poster.jpg"
 import { fontVariables } from "./fonts";
 import { clashesWith, LINEUP, SLOTS, type FestivalSet } from "./lineup";
 import { LineupPoster } from "./poster";
-import { ELEMENT_ORDER, ELEMENTS, SHAPE, TYPE, type ElementKey } from "./tokens";
+import { ELEMENT_ORDER, ELEMENTS, elementVars, SHAPE, TYPE, type ElementKey } from "./tokens";
 import {
   BalanceMeter,
   Badge,
@@ -346,6 +346,7 @@ export function LineupPage() {
   const p = usePlanner();
   const { setElement } = useElement();
   const box = useRef<HTMLDivElement>(null);
+  const bar = useRef<HTMLDivElement>(null);
   const [filtering, setFiltering] = useState(false);
   const { registerDayJump } = p;
 
@@ -371,17 +372,12 @@ export function LineupPage() {
     p.setHideClashes(false);
   };
 
-  // A day button scrolls the lineup frame to that day, and brings the frame into view.
+  // A day button scrolls the page to that day's band, just under the pinned lineup bar.
   useEffect(() => {
     const jump = (day: ElementKey) => {
-      const frame = box.current;
-      const band = frame?.querySelector<HTMLElement>(`section[data-day="${day}"]`);
-      if (!frame || !band) return;
-      const behavior = reducedMotion() ? "auto" : "smooth";
-      frame.scrollTo({ top: band.offsetTop, behavior });
-      const headerBottom = document.querySelector("header")?.getBoundingClientRect().bottom ?? 0;
-      const r = frame.getBoundingClientRect();
-      if (r.top < headerBottom || r.top > window.innerHeight * 0.6) frame.scrollIntoView({ behavior, block: "start" });
+      box.current
+        ?.querySelector<HTMLElement>(`section[data-day="${day}"]`)
+        ?.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
     };
     registerDayJump(jump);
     // Arriving from another page with a day in the address, e.g. /planner#fire.
@@ -398,26 +394,26 @@ export function LineupPage() {
     };
   }, [registerDayJump, setElement]);
 
-  // Scroll spy: the last band to reach the top fifth of the frame is the page's element.
-  // At the very bottom it is the last day, whose band may be too short to reach the top.
+  // Scroll spy: the last band to reach the pinned lineup bar is the page's element. At the
+  // very bottom of the page it is the last day, whose band may be too short to get there.
   useEffect(() => {
-    const frame = box.current;
-    if (!frame) return;
+    const list = box.current;
+    if (!list) return;
     let queued = 0;
     const spy = () => {
       queued = 0;
-      const bands = [...frame.querySelectorAll<HTMLElement>("section[data-day]")];
-      const atBottom = frame.scrollTop >= frame.scrollHeight - frame.clientHeight - 2;
-      const line = frame.scrollTop + frame.clientHeight * 0.2;
-      const current = atBottom ? bands.at(-1) : bands.filter((b) => b.offsetTop <= line).at(-1);
+      const bands = [...list.querySelectorAll<HTMLElement>("section[data-day]")];
+      const line = (bar.current?.getBoundingClientRect().bottom ?? 0) + 40;
+      const atBottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2;
+      const current = atBottom ? bands.at(-1) : bands.filter((b) => b.getBoundingClientRect().top <= line).at(-1);
       if (current) setElement(current.dataset.day as ElementKey);
     };
     const onScroll = () => {
       if (!queued) queued = requestAnimationFrame(spy);
     };
-    frame.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("scroll", onScroll, { passive: true });
     return () => {
-      frame.removeEventListener("scroll", onScroll);
+      window.removeEventListener("scroll", onScroll);
       cancelAnimationFrame(queued);
     };
   }, [setElement]);
@@ -454,7 +450,7 @@ export function LineupPage() {
 
             <section id="lineup" aria-labelledby="lineup-title" className="mt-6 sm:mt-8">
               {/* The heading, search, and filters stay pinned under the header while the lineup scrolls. */}
-              <div className="sticky top-[115px] z-20 -mx-4 bg-(--parchment) px-4 pt-2 pb-3 sm:-mx-8 sm:px-8 lg:top-[68px]">
+              <div ref={bar} className="sticky top-[115px] z-20 -mx-4 bg-(--parchment) px-4 pt-2 pb-3 sm:-mx-8 sm:px-8 lg:top-[68px]">
                 <h2 id="lineup-title" className={TYPE.heading}>
                   The lineup
                 </h2>
@@ -491,10 +487,9 @@ export function LineupPage() {
                   </div>
                 )}
               </div>
-              <div className="mt-2">
+              <div ref={box} className="mt-2">
                 <LineupPoster
-                  boxed
-                  boxRef={box}
+                  titled={false}
                   saved={p.saved}
                   onToggle={p.toggle}
                   flagged={p.flagged}
@@ -759,7 +754,9 @@ function JourneyDrawer({
                         </p>
                       )}
                     </div>
-                    <SaveToggle saved={false} artist={s.artist} onToggle={() => onToggle(s.artist)} />
+                    <span className="contents" style={elementVars(s.nation)}>
+                      <SaveToggle saved={false} artist={s.artist} onToggle={() => onToggle(s.artist)} />
+                    </span>
                     <IconButton label={`Remove interest in ${s.artist}`} onClick={() => onUnflag(s.artist)}>
                       <FlagIcon filled />
                     </IconButton>
