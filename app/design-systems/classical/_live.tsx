@@ -3,7 +3,8 @@
 import Image from "next/image";
 import { useId, useState } from "react";
 
-import { clashesWith, DAY_NAMES, DAYS, PERFORMANCES, SLOTS, VENUES, type Day } from "@/app/_themes/classical/programme";
+import { clashesWith, DAY_NAMES, DAYS, PERFORMANCES, VENUES, type Day, type Performance } from "@/app/_themes/classical/programme";
+import { PageTurn, ScoreDay } from "@/app/_themes/classical/score";
 import { TYPE } from "@/app/_themes/classical/tokens";
 import {
   AddButton,
@@ -14,7 +15,6 @@ import {
   CloseIcon,
   DetailPanel,
   IconButton,
-  ItineraryRow,
   Modal,
   PerformanceCard,
   Radio,
@@ -44,33 +44,30 @@ export function LiveComponents() {
   const [day, setDay] = useState<Day>("Sat");
   const [venues, setVenues] = useState(() => new Set<string>());
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState("time");
   const [show, setShow] = useState("all");
   const [hideClashes, setHideClashes] = useState(false);
   const [warn, setWarn] = useState(true);
   const [detail, setDetail] = useState<string | null>(null);
   const [notesOpen, setNotesOpen] = useState(false);
+  const [selected, setSelected] = useState<string | null>("Bach Cello Suites");
   const ids = useId();
 
   const toggle = (title: string) => setSaved((prev) => toggled(prev, title));
   const savedList = PERFORMANCES.filter((p) => saved.has(p.title));
-  const clashing = (title: string) => warn && saved.has(title) && clashesWith(find(title), savedList).length > 0;
 
-  const rows = PERFORMANCES.filter(
-    (p) =>
-      p.day === day &&
-      (venues.size === 0 || venues.has(p.venue.name)) &&
-      (show === "all" || saved.has(p.title)) &&
-      !(hideClashes && !saved.has(p.title) && clashesWith(p, savedList).length > 0) &&
-      p.title.toLowerCase().includes(query.trim().toLowerCase()),
-  ).sort((a, b) => {
-    if (sort === "venue") return VENUES.indexOf(a.venue) - VENUES.indexOf(b.venue);
-    if (sort === "title") return a.title.localeCompare(b.title);
-    return SLOTS.indexOf(a.time) - SLOTS.indexOf(b.time);
-  });
+  const q = query.trim().toLowerCase();
+  // Blocks that don't match fade back, so the timetable keeps its shape.
+  const dim = (p: Performance) =>
+    (q !== "" && !p.title.toLowerCase().includes(q)) ||
+    (show === "saved" && !saved.has(p.title)) ||
+    (hideClashes && !saved.has(p.title) && clashesWith(p, savedList).length > 0);
+  const shownVenues = venues.size === 0 ? VENUES : VENUES.filter((v) => venues.has(v.name));
 
-  // Saved performances on this day that share a slot: the double engagement to resolve.
-  const clash = warn ? savedList.filter((p) => p.day === day && clashesWith(p, savedList).length > 0) : [];
+  const changeDay = (d: Day) => {
+    setDay(d);
+    setSelected(null);
+  };
+
   const keep = (title: string) =>
     setSaved((prev) => {
       const next = new Set(prev);
@@ -85,78 +82,65 @@ export function LiveComponents() {
   return (
     <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
       <Panel
-        title="Itinerary: tabs, venue chips, list rows & notice"
-        note="Bach Cello Suites is already saved. Save Boccherini Guitar Quintets, also Saturday at 7:00, to cause a double engagement. Click a title for its programme notes."
+        title="The Score: timetable, programme notes & page turn"
+        note="Venues down the side, time across: a double engagement shows as two blocks in one column. Choose a block to read it in the order of the day below. Bach Cello Suites is saved; save Boccherini Guitar Quintets (Saturday, 7:00) to cause one. Change day to turn the page."
         className="lg:col-span-2"
       >
-        <div className="grid gap-10 lg:grid-cols-[260px_1fr]">
-          <div className="flex flex-col gap-6">
-            <TextField
-              label="Search the programme"
-              type="search"
-              placeholder="Try “Handel”"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-            <Select label="Sort by" value={sort} onChange={(e) => setSort(e.target.value)}>
-              <option value="time">Time</option>
-              <option value="venue">Venue</option>
-              <option value="title">Title</option>
-            </Select>
+        <div className="grid gap-x-10 gap-y-6 md:grid-cols-[minmax(0,18rem)_1fr]">
+          <TextField
+            label="Search the programme"
+            type="search"
+            placeholder="Try “Handel”"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <div className="flex flex-wrap items-end gap-x-8 gap-y-4">
             <fieldset>
               <legend className={`${TYPE.label} text-(--muted)`}>Show</legend>
-              <div className="mt-3 flex flex-col gap-2.5">
+              <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2.5">
                 <Radio name={`${ids}-show`} value="all" checked={show === "all"} onChange={() => setShow("all")} label="All performances" />
                 <Radio name={`${ids}-show`} value="saved" checked={show === "saved"} onChange={() => setShow("saved")} label="Only my itinerary" />
               </div>
             </fieldset>
-            <Checkbox
-              label="Hide performances that clash"
-              checked={hideClashes}
-              onChange={(e) => setHideClashes(e.target.checked)}
-            />
+            <Checkbox label="Hide performances that clash" checked={hideClashes} onChange={(e) => setHideClashes(e.target.checked)} />
             <Toggle label="Warn me about double engagements" checked={warn} onChange={setWarn} />
           </div>
+        </div>
 
-          <div className="min-w-0">
-            <div className="mb-6 flex flex-wrap gap-2">
-              {VENUES.map((v) => (
-                <VenueChip
-                  key={v.name}
-                  venue={v}
-                  selected={venues.has(v.name)}
-                  onToggle={() => setVenues((prev) => toggled(prev, v.name))}
-                />
-              ))}
+        <div className="mt-6 flex flex-wrap gap-2">
+          {VENUES.map((v) => (
+            <VenueChip
+              key={v.name}
+              venue={v}
+              selected={venues.has(v.name)}
+              onToggle={() => setVenues((prev) => toggled(prev, v.name))}
+            />
+          ))}
+        </div>
+
+        <div className="mt-8">
+          <Tabs label="Festival day" tabs={DAYS} selected={day} onSelect={(d) => changeDay(d as Day)}>
+            <div className="mt-6" aria-live="polite">
+              <PageTurn
+                day={day}
+                render={(d, live) => (
+                  <ScoreDay
+                    day={d}
+                    venues={shownVenues}
+                    saved={saved}
+                    selected={live ? selected : null}
+                    onSelect={setSelected}
+                    onToggleSaved={toggle}
+                    onKeep={keep}
+                    dim={dim}
+                    warn={warn}
+                    live={live}
+                    notice={(sets, onKeep) => <ClashNotice sets={sets} onKeep={onKeep} />}
+                  />
+                )}
+              />
             </div>
-            <Tabs label="Festival day" tabs={DAYS} selected={day} onSelect={(d) => setDay(d as Day)}>
-              <div aria-live="polite">
-                {clash.length > 1 && (
-                  <div className="mt-6">
-                    <ClashNotice sets={clash} onKeep={(p) => keep(p.title)} />
-                  </div>
-                )}
-                {rows.length > 0 ? (
-                  <ul className="mt-2">
-                    {rows.map((p) => (
-                      <ItineraryRow
-                        key={p.title}
-                        performance={p}
-                        saved={saved.has(p.title)}
-                        clash={clashing(p.title)}
-                        onToggle={() => toggle(p.title)}
-                        onDetails={() => setDetail(p.title)}
-                      />
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-6 bg-(--linen) p-6 text-center text-(--muted)">
-                    Nothing on {DAY_NAMES[day]} matches. Try another venue or day.
-                  </p>
-                )}
-              </div>
-            </Tabs>
-          </div>
+          </Tabs>
         </div>
       </Panel>
 
@@ -199,8 +183,17 @@ export function LiveComponents() {
           )}
         </Panel>
 
-        <Panel title="Badges">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+        <Panel title="Select & badges" note="A select is the compact way to change day on a narrow screen, and it turns the same page.">
+          <div className="max-w-xs">
+            <Select label="Go to day" value={day} onChange={(e) => changeDay(e.target.value as Day)}>
+              {DAYS.map((d) => (
+                <option key={d} value={d}>
+                  {DAY_NAMES[d]}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">
             <Badge tone="clash" />
             <span className="inline-flex items-center gap-2">
               <Badge tone="count" count={saved.size} />
