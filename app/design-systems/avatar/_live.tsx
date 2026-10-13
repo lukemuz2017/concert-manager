@@ -1,43 +1,14 @@
 "use client";
 
-import Image from "next/image";
-import { useId, useState } from "react";
+import { useState } from "react";
 
-import { clashesWith, LINEUP, SLOTS, STAGES } from "@/app/_themes/avatar/lineup";
+import { clashesWith, LINEUP, STAGES } from "@/app/_themes/avatar/lineup";
 import { LineupPoster } from "@/app/_themes/avatar/poster";
-import { ELEMENT_ORDER, ELEMENTS, elementVars, SHAPE, TYPE, type ElementKey } from "@/app/_themes/avatar/tokens";
-import {
-  AddButton,
-  BalanceMeter,
-  Badge,
-  Button,
-  Checkbox,
-  ClashNotice,
-  CloseIcon,
-  DayTabs,
-  Emblem,
-  FilterBar,
-  FOCUS,
-  noFilters,
-  matchesFilters,
-  type Filters,
-  IconButton,
-  JourneyMap,
-  JourneyPath,
-  LineupRow,
-  Modal,
-  NextUp,
-  Radio,
-  ScrollPanel,
-  Select,
-  SetCard,
-  TextField,
-  TextLink,
-  Toggle,
-  useElement,
-} from "@/app/_themes/avatar/ui";
-import nightStage from "@/app/mood-boards/avatar/images/night-stage.jpg";
-import town from "@/app/mood-boards/avatar/images/town.jpg";
+import { ELEMENT_ORDER, ELEMENTS, elementVars, SHAPE, TYPE } from "@/app/_themes/avatar/tokens";
+import { StageCard } from "@/app/_themes/avatar/gallery";
+import { anyLineup, FilterDialog, lineupChips, lineupMatcher, LineupSearchBar, type LineupQuery } from "@/app/_themes/avatar/lineup-controls";
+import { JourneySheet } from "@/app/_themes/avatar/site";
+import { AddButton, Badge, Button, CloseIcon, Emblem, FlagButton, FOCUS, IconButton, TextLink, useElement } from "@/app/_themes/avatar/ui";
 
 import { Panel } from "./_parts";
 
@@ -151,40 +122,19 @@ export function MotionLab() {
 /* Components, working ------------------------------------------------------- */
 
 export function LiveComponents() {
-  const { element } = useElement();
   const [saved, setSaved] = useState(
-    () => new Set(["Bosco the Bear", "Kuzon's Crew", "Dragon of the West", "Moon Spirit Choir", "Badgermoles"]),
+    () => new Set(["Flying Lemurs", "Kuzon's Crew", "Dragon of the West", "Moon Spirit Choir", "Badgermoles"]),
   );
-  const [filters, setFilters] = useState<Filters>(noFilters);
-  const [flagged, setFlagged] = useState(() => new Set(["Healing Hands", "Whale-Tooth Drums"]));
-  const [query, setQuery] = useState("");
-  const [sort, setSort] = useState("time");
-  const [show, setShow] = useState("all");
-  const [hideClashes, setHideClashes] = useState(false);
+  const [flagged, setFlagged] = useState(() => new Set(["Bato's Boat", "Whale-Tooth Drums"]));
+  const [lineup, setLineup] = useState<LineupQuery>(anyLineup);
+  const [filtering, setFiltering] = useState(false);
+  const [tab, setTab] = useState<"journey" | "interested">("journey");
   const [warn, setWarn] = useState(true);
-  const [detail, setDetail] = useState<string | null>(null);
-  const [heroAdded, setHeroAdded] = useState(false);
-  const ids = useId();
 
   const toggle = (artist: string) => setSaved((prev) => toggled(prev, artist));
   const flag = (artist: string) => setFlagged((prev) => toggled(prev, artist));
   const savedList = LINEUP.filter((s) => saved.has(s.artist));
-  const clashing = (artist: string) => warn && saved.has(artist) && clashesWith(find(artist), savedList).length > 0;
-
-  const rows = LINEUP.filter(
-    (s) =>
-      s.day === element &&
-      matchesFilters(s, filters) &&
-      (show === "all" || (show === "saved" ? saved.has(s.artist) : flagged.has(s.artist))) &&
-      !(hideClashes && !saved.has(s.artist) && clashesWith(s, savedList).length > 0) &&
-      s.artist.toLowerCase().includes(query.trim().toLowerCase()),
-  ).sort((a, b) => {
-    if (sort === "stage") return STAGES.indexOf(a.stage) - STAGES.indexOf(b.stage);
-    if (sort === "artist") return a.artist.localeCompare(b.artist);
-    return SLOTS.indexOf(a.time) - SLOTS.indexOf(b.time);
-  });
-
-  const clash = warn ? savedList.filter((s) => s.day === element && clashesWith(s, savedList).length > 0) : [];
+  const flaggedList = LINEUP.filter((s) => flagged.has(s.artist));
   const keep = (artist: string) =>
     setSaved((prev) => {
       const next = new Set(prev);
@@ -192,166 +142,82 @@ export function LiveComponents() {
       return next;
     });
 
-  const players = find("The Ember Island Players");
-  const open = detail ? find(detail) : null;
-  const today = ELEMENTS[element as ElementKey];
+  const isShown = lineupMatcher(lineup, saved, flagged);
+  const shownCount = LINEUP.filter(isShown).length;
+  const chips = lineupChips(lineup, setLineup);
+  const narrowed = chips.length > 0 || lineup.query.trim() !== "";
+  const oasis = STAGES.find((st) => st.name === "Spirit Oasis")!;
 
   return (
     <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
       <Panel
-        title="Lineup poster"
-        note="All 100 artists, a band per day. Each name wears its nation's emblem and underline. Filter by nation, stage, or genre and everyone else fades back. Hover a name, or click it, for the time, the stage, and the add button."
+        title="Lineup: search, filters & poster"
+        note="All 100 artists, a band per day, each name in its nation's emblem and underline. Search, or open Filters for nation, stage, genre, time, and clashes; applied filters become chips, and everyone else fades back. Rest on a name, or click it, for the time, the stage, and the add and Interested buttons."
         className="lg:col-span-2"
       >
-        <div className="mb-6">
-          <FilterBar filters={filters} onChange={setFilters} />
+        <h3 className={TYPE.heading}>The lineup</h3>
+        <div className="mt-3 mb-5">
+          <LineupSearchBar lineup={lineup} onChange={setLineup} chips={chips} shownCount={shownCount} onOpenFilters={() => setFiltering(true)} />
         </div>
-        <LineupPoster saved={saved} onToggle={toggle} flagged={flagged} onFlag={flag} filters={filters} />
-      </Panel>
-
-      <Panel
-        title="Lineup: day tabs, filters, rows & clash"
-        note="The day tabs are today's element: pick one and the whole page follows. On Saturday, add Healing Hands to collide with Kuzon's Crew at 7:00."
-        className="lg:col-span-2"
-      >
-        <div className="grid gap-10 lg:grid-cols-[250px_1fr]">
-          <div className="flex flex-col gap-6">
-            <TextField label="Search the lineup" type="search" placeholder="Try “dragon”" value={query} onChange={(e) => setQuery(e.target.value)} />
-            <Select label="Sort by" value={sort} onChange={(e) => setSort(e.target.value)}>
-              <option value="time">Time</option>
-              <option value="stage">Stage</option>
-              <option value="artist">Artist</option>
-            </Select>
-            <fieldset>
-              <legend className={`${TYPE.label} text-(--ink-muted)`}>Show</legend>
-              <div className="mt-3 flex flex-col gap-2.5">
-                <Radio name={`${ids}-show`} value="all" checked={show === "all"} onChange={() => setShow("all")} label="The whole lineup" />
-                <Radio name={`${ids}-show`} value="saved" checked={show === "saved"} onChange={() => setShow("saved")} label="Only my journey" />
-                <Radio name={`${ids}-show`} value="flagged" checked={show === "flagged"} onChange={() => setShow("flagged")} label="Only flagged" />
-              </div>
-            </fieldset>
-            <Checkbox label="Hide sets that would clash" checked={hideClashes} onChange={(e) => setHideClashes(e.target.checked)} />
-            <Toggle label="Warn me about clashes" checked={warn} onChange={setWarn} />
-          </div>
-
-          <div className="min-w-0">
-            <div className="mb-6">
-              <FilterBar filters={filters} onChange={setFilters} />
-            </div>
-            <DayTabs>
-              <div aria-live="polite">
-                {clash.length > 1 && (
-                  <div className="mt-5">
-                    <ClashNotice sets={clash} onKeep={(s) => keep(s.artist)} />
-                  </div>
-                )}
-                {rows.length > 0 ? (
-                  <ul className="mt-2">
-                    {rows.map((s) => (
-                      <LineupRow
-                        key={s.artist}
-                        set={s}
-                        saved={saved.has(s.artist)}
-                        flagged={flagged.has(s.artist)}
-                        clash={clashing(s.artist)}
-                        onToggle={() => toggle(s.artist)}
-                        onDetails={() => setDetail(s.artist)}
-                      />
-                    ))}
-                  </ul>
-                ) : (
-                  <p className={`mt-5 bg-(--el-wash) p-6 text-center text-(--ink-muted) ${SHAPE.card}`}>
-                    Nothing on {today.dayName} matches. Try another stage, or another day.
-                  </p>
-                )}
-              </div>
-            </DayTabs>
-          </div>
-        </div>
-      </Panel>
-
-      <Panel
-        title="Journey: path, map & next up"
-        note="Your day as a route. Saturday shows a tight walk: Bosco the Bear plays the Crystal Catacombs at 5:30, and Kuzon's Crew start at 7:00 on another stage. The clock is set to 6:40 PM."
-        className="lg:col-span-2"
-      >
-        <div className="grid items-start gap-8 lg:grid-cols-[1fr_1.3fr]">
-          <JourneyPath day={element} saved={savedList} />
-          <div className="flex flex-col gap-5">
-            <JourneyMap day={element} saved={savedList} />
-            <NextUp day={element} saved={savedList} lineup={LINEUP} />
-          </div>
-        </div>
-      </Panel>
-
-      <Panel title="Festival hero" note="The opening of the site: the day's element carries the one action that matters.">
-        <div className={`overflow-hidden border-[1.5px] border-(--ink) ${SHAPE.card}`}>
-          <div className="relative h-56">
-            <Image src={town} alt="A festival town of pagodas and red banners below mountain peaks" fill sizes="560px" className="object-cover" />
-            <div className="absolute inset-0 bg-linear-to-r from-(--paper) from-35% via-(--paper)/70 via-55% to-transparent" />
-            <div className="absolute inset-y-0 left-0 flex max-w-[16rem] flex-col justify-center gap-3 p-5">
-              <p className={TYPE.heading}>Four nations. One stage.</p>
-              <div>
-                <AddButton added={heroAdded} onToggle={() => setHeroAdded(!heroAdded)} label="Start my journey" addedLabel="Journey started" />
-              </div>
-            </div>
-          </div>
-          <ul className="grid grid-cols-4 divide-x-[1.5px] divide-dashed divide-(--line) bg-(--paper)">
-            {ELEMENT_ORDER.map((key) => (
-              <li key={key} className="flex flex-col items-center gap-1 py-3" style={{ color: ELEMENTS[key].line }}>
-                <Emblem element={key} className="h-7 w-7" />
-                <span className={`${TYPE.label} tracking-[0.12em]! text-(--ink)`}>{ELEMENTS[key].day}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </Panel>
-
-      <Panel title="Card" note="A set, its stage, and the primary action.">
-        <SetCard
-          set={players}
-          saved={saved.has(players.artist)}
-          onToggle={() => toggle(players.artist)}
-          onDetails={() => setDetail(players.artist)}
-          image={<Image src={nightStage} alt="A festival stage lit up at dusk before a huge crowd" fill sizes="560px" className="object-cover" />}
+        <LineupPoster titled={false} saved={saved} onToggle={toggle} flagged={flagged} onFlag={flag} shown={narrowed ? isShown : undefined} />
+        <FilterDialog
+          open={filtering}
+          onClose={() => setFiltering(false)}
+          lineup={lineup}
+          onChange={setLineup}
+          activeCount={chips.length}
+          shownCount={shownCount}
+          savedCount={saved.size}
+          flaggedCount={flagged.size}
+          idPrefix="ds-filters"
         />
       </Panel>
 
-      <Panel title="Balance" note="How your journey spreads across the four elements. Add a Sunday set to bring air back in.">
-        <BalanceMeter saved={savedList} />
-      </Panel>
-
-      <Panel title="Buttons, link & badges">
-        <div className="flex flex-wrap items-center gap-4">
-          <Button>Explore the lineup</Button>
-          <Button variant="secondary">View the map</Button>
-          <IconButton label="Close">
-            <CloseIcon />
-          </IconButton>
-          <TextLink href="/mood-boards/avatar">See the mood board</TextLink>
-        </div>
-        <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">
-          <Badge tone="clash" />
-          <Badge tone="tight" count={12} />
-          <span className="inline-flex items-center gap-2">
-            <Badge tone="count" count={saved.size} />
-            <span className="text-(--ink-muted)">On your journey</span>
-          </span>
-        </div>
-      </Panel>
-
-      <Modal open={open !== null} onClose={() => setDetail(null)} labelledBy={`${ids}-detail`}>
-        {open && (
-          <ScrollPanel
-            set={open}
-            titleId={`${ids}-detail`}
-            saved={saved.has(open.artist)}
-            clashes={warn ? clashesWith(open, savedList) : []}
-            onToggle={() => toggle(open.artist)}
-            onClose={() => setDetail(null)}
+      <Panel
+        title="My journey: tabs, path, map & clash"
+        note="What the journey drawer holds. Saturday shows a tight walk from Flying Lemurs to Kuzon's Crew; add Bato's Boat on the poster to collide with Kuzon's Crew at 7:00. The clock is set to 6:40 PM."
+      >
+        <div className={`flex h-[46rem] flex-col overflow-hidden border-[1.5px] border-(--ink) bg-(--paper) ${SHAPE.card}`}>
+          <JourneySheet
+            tab={tab}
+            onTab={setTab}
+            saved={saved}
+            savedList={savedList}
+            flaggedList={flaggedList}
+            warn={warn}
+            onWarn={setWarn}
+            onToggle={toggle}
+            onUnflag={flag}
+            onKeep={keep}
           />
-        )}
-      </Modal>
+        </div>
+      </Panel>
+
+      <div className="grid gap-6">
+        <Panel title="Card" note="A stage: its painting, its nation, its line, and the walk from the gate.">
+          <StageCard stage={oasis} />
+        </Panel>
+
+        <Panel title="Buttons, link & badges">
+          <div className="flex flex-wrap items-center gap-4">
+            <AddButton added={false} />
+            <FlagButton flagged={false} />
+            <Button variant="secondary">Clear all</Button>
+            <IconButton label="Close">
+              <CloseIcon />
+            </IconButton>
+            <TextLink href="/planner/festival">The festival</TextLink>
+          </div>
+          <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">
+            <Badge tone="clash" />
+            <Badge tone="tight" count={13} />
+            <span className="inline-flex items-center gap-2">
+              <Badge tone="count" count={saved.size} />
+              <span className="text-(--ink-muted)">On your journey</span>
+            </span>
+          </div>
+        </Panel>
+      </div>
     </div>
   );
 }

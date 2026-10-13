@@ -8,6 +8,7 @@ import { LINEUP } from "@/app/_themes/avatar/lineup";
 import { color, ELEMENT_ORDER, ELEMENTS, elementVars, SHAPE, TYPE } from "@/app/_themes/avatar/tokens";
 import {
   AddButton,
+  Badge,
   Button,
   Checkbox,
   ClashNotice,
@@ -17,10 +18,9 @@ import {
   FlagButton,
   IconButton,
   NationMark,
-  PassportStamp,
   Radio,
   Seal,
-  StageChip,
+  RemovableChip,
   TextField,
   TextLink,
   Toggle,
@@ -61,11 +61,14 @@ const BASE_ROLES: { role: string; name: string; hex: string; use: string; checks
     ],
   },
   {
-    role: "Text",
+    role: "Text & chosen",
     name: "Ink",
     hex: color.ink,
-    use: "Words, linework, and everything you chose.",
-    checks: [{ on: "On parchment", fg: color.ink, bg: color.parchment }],
+    use: "Words and linework, and the fill for what you've chosen: the journey button and side tab, applied filters, a set once it's on your journey.",
+    checks: [
+      { on: "On parchment", fg: color.ink, bg: color.parchment },
+      { on: "Paper text on ink", fg: color.paper, bg: color.ink },
+    ],
   },
   {
     role: "Muted",
@@ -107,8 +110,8 @@ const TYPE_ROLES = [
     use: "Everything you read.",
     sample: (
       <p className={`max-w-prose ${TYPE.body}`}>
-        Bosco the Bear plays the Crystal Catacombs at 5:30, and Kuzon&apos;s Crew start at 7:00 across the grounds.
-        Leave <b>eleven minutes early</b>, or miss the opening.
+        Flying Lemurs play the Crystal Catacombs at 5:30, and Kuzon&apos;s Crew start at 7:00 across the grounds.
+        Leave <b>thirteen minutes early</b>, or miss the opening.
       </p>
     ),
   },
@@ -191,14 +194,14 @@ const MATRIX: { name: string; cells: (ReactNode | null)[] }[] = [
     ],
   },
   {
-    name: "Stage chip",
+    name: "Filter chip",
     cells: [
-      <StageChip key="rest" name="Wan Shi Tong's Library" nation="earth" />,
-      <StageChip key="hover" name="Wan Shi Tong's Library" nation="earth" force="hover" />,
-      <StageChip key="focus" name="Wan Shi Tong's Library" nation="earth" force="focus" />,
-      <StageChip key="pressed" name="Wan Shi Tong's Library" nation="earth" force="pressed" />,
-      <StageChip key="selected" name="Wan Shi Tong's Library" nation="earth" selected />,
-      <StageChip key="disabled" name="Wan Shi Tong's Library" nation="earth" disabled />,
+      <RemovableChip key="rest" label="Fire Nation" />,
+      <RemovableChip key="hover" label="Fire Nation" force="hover" />,
+      <RemovableChip key="focus" label="Fire Nation" force="focus" />,
+      <RemovableChip key="pressed" label="Fire Nation" force="pressed" />,
+      null,
+      <RemovableChip key="disabled" label="Fire Nation" disabled />,
     ],
   },
   {
@@ -312,7 +315,7 @@ function Card({ className = "", style, children }: { className?: string; style?:
 export default function FourNationsDesignSystem() {
   const players = LINEUP.find((s) => s.artist === "The Ember Island Players")!;
   const sages = LINEUP.find((s) => s.artist === "Kuzon's Crew")!;
-  const healers = LINEUP.find((s) => s.artist === "Healing Hands")!;
+  const healers = LINEUP.find((s) => s.artist === "Bato's Boat")!;
 
   return (
     <ElementScope initial="fire" className={`${fontVariables} min-h-screen bg-(--parchment) text-(--ink)`} style={{ fontFamily: "var(--font-alegreya-sans)" }}>
@@ -702,17 +705,20 @@ export default function FourNationsDesignSystem() {
               </figure>
 
               <figure className="flex flex-col gap-3">
-                <figcaption className={`${TYPE.label} text-(--ink-muted)`}>Success · stamped</figcaption>
-                <Card className="flex flex-1 flex-wrap items-center gap-6">
-                  <PassportStamp set={players} />
-                  <div className="min-w-0 flex-1">
-                    <p className={TYPE.heading}>Stamped.</p>
+                <figcaption className={`${TYPE.label} text-(--ink-muted)`}>Success · on your journey</figcaption>
+                <Card className="flex flex-1 flex-col gap-4">
+                  <div>
+                    <p className={TYPE.heading}>{players.artist}</p>
                     <p className="mt-1 text-(--ink-muted)">
-                      {players.artist} is on your journey: {ELEMENTS[players.day].dayName}, {players.time}, {players.stage.name}.
+                      {ELEMENTS[players.day].dayName}, {players.time}, {players.stage.name}.
                     </p>
-                    <p className="mt-3">
-                      <TextLink href="#ui-states">Undo</TextLink>
-                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-4">
+                    <AddButton added />
+                    <span className="inline-flex items-center gap-2 text-sm text-(--ink-muted)">
+                      <Badge tone="count" count={1} />
+                      in the journey button
+                    </span>
                   </div>
                 </Card>
               </figure>
