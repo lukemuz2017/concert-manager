@@ -91,6 +91,25 @@ function StageArt({ name }: { name: Stage["name"] }) {
   );
 }
 
+// A stage: its painting, its nation, its line, and how far it is from the gate.
+export function StageCard({ stage }: { stage: Stage }) {
+  const art = STAGE_ART[stage.name];
+  return (
+    <div className={`h-full overflow-hidden border-[1.5px] border-(--ink) bg-(--paper) ${SHAPE.card}`}>
+      <StageArt name={stage.name} />
+      <div className="border-t-[1.5px] border-(--ink) p-5">
+        <h3 className={`flex items-center gap-2.5 ${TYPE.heading}`}>
+          <NationMark nation={stage.nation} className="h-7 w-7" />
+          {stage.name}
+        </h3>
+        <p className={`mt-1 ${TYPE.label} text-(--ink-muted)`}>{art.kind}</p>
+        <p className="mt-3 italic">{art.line}</p>
+        <p className="mt-3 text-sm text-(--ink-muted)">{walkMinutes("gate", stage.name)} min walk from the main gate</p>
+      </div>
+    </div>
+  );
+}
+
 export function FestivalPage() {
   const { setElement } = useElement();
   return (
@@ -142,19 +161,9 @@ export function FestivalPage() {
         </h2>
         <ul className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {STAGES.map((stage) => {
-            const art = STAGE_ART[stage.name];
             return (
-              <li key={stage.name} className={`overflow-hidden border-[1.5px] border-(--ink) bg-(--paper) ${SHAPE.card}`}>
-                <StageArt name={stage.name} />
-                <div className="border-t-[1.5px] border-(--ink) p-5">
-                  <h3 className={`flex items-center gap-2.5 ${TYPE.heading}`}>
-                    <NationMark nation={stage.nation} className="h-7 w-7" />
-                    {stage.name}
-                  </h3>
-                  <p className={`mt-1 ${TYPE.label} text-(--ink-muted)`}>{art.kind}</p>
-                  <p className="mt-3 italic">{art.line}</p>
-                  <p className="mt-3 text-sm text-(--ink-muted)">{walkMinutes("gate", stage.name)} min walk from the main gate</p>
-                </div>
+              <li key={stage.name}>
+                <StageCard stage={stage} />
               </li>
             );
           })}

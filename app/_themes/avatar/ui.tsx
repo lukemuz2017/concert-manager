@@ -1528,21 +1528,39 @@ export function filterChips(filters: Filters, onChange: (next: Filters) => void)
   ];
 }
 
+// An applied filter: ink, because you chose it. Press it to take the filter away.
+export function RemovableChip({
+  label,
+  onRemove,
+  force,
+  disabled,
+}: {
+  label: string;
+  onRemove?: () => void;
+  force?: Force;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onRemove}
+      disabled={disabled}
+      aria-label={`Remove filter: ${label}`}
+      className={`inline-flex items-center gap-1.5 border-[1.5px] border-(--ink) bg-(--ink) py-1 pr-2 pl-3 text-sm font-medium text-(--paper) enabled:cursor-pointer enabled:hover:brightness-[1.35] ${SHAPE.button} ${BEND} ${FOCUS} ${DISABLED} ${pin({ hover: "brightness-[1.35]!", pressed: "brightness-[1.35]!" }, force)}`}
+    >
+      {label}
+      <CloseIcon className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
 export function FilterChips({ chips, onClear }: { chips: ActiveFilter[]; onClear: () => void }) {
   if (chips.length === 0) return null;
   return (
     <ul className="flex flex-wrap items-center gap-2" aria-label="Active filters">
       {chips.map((c) => (
         <li key={c.key}>
-          <button
-            type="button"
-            onClick={c.remove}
-            aria-label={`Remove filter: ${c.label}`}
-            className={`inline-flex cursor-pointer items-center gap-1.5 border-[1.5px] border-(--ink) bg-(--ink) py-1 pr-2 pl-3 text-sm font-medium text-(--paper) ${SHAPE.button} ${FOCUS}`}
-          >
-            {c.label}
-            <CloseIcon className="h-3.5 w-3.5" />
-          </button>
+          <RemovableChip label={c.label} onRemove={c.remove} />
         </li>
       ))}
       <li>

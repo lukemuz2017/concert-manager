@@ -3,46 +3,34 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode, type Ref } from "react";
 
 import festivalPoster from "@/app/mood-boards/avatar/images/festival-poster.jpg";
 
 import { fontVariables } from "./fonts";
 import { clashesWith, LINEUP, SLOTS, type FestivalSet } from "./lineup";
+import { anyLineup, FilterDialog, lineupChips, lineupMatcher, LineupSearchBar, type LineupQuery } from "./lineup-controls";
 import { LineupPoster } from "./poster";
 import { ELEMENT_ORDER, ELEMENTS, elementVars, SHAPE, TYPE, type ElementKey } from "./tokens";
 import {
   BalanceMeter,
   Badge,
-  Button,
-  Checkbox,
   ClashNotice,
   CloseIcon,
   ElementScope,
   Emblem,
-  FilterChips,
-  filterChips,
-  FilterGroups,
-  FilterIcon,
   FlagIcon,
   FOCUS,
   IconButton,
   JourneyMap,
   JourneyPath,
-  matchesFilters,
-  Modal,
   NationMark,
   NextUp,
-  noFilters,
-  Radio,
   SaveToggle,
   Seal,
-  SearchIcon,
-  TextField,
+  TextLink,
   Toggle,
   useElement,
-  type ActiveFilter,
-  type Filters,
 } from "./ui";
 
 // The Four Nations site. The day in view is the "element", and the whole page takes it on:
@@ -50,22 +38,14 @@ import {
 // The planner's state lives in the shell, which the /planner layout keeps mounted, so a
 // journey survives moving between the lineup and the festival page. Nothing is saved beyond that.
 
-type Show = "all" | "journey" | "flagged";
-
 type Planner = {
   saved: Set<string>;
   flagged: Set<string>;
   savedList: FestivalSet[];
   toggle: (artist: string) => void;
   flag: (artist: string) => void;
-  query: string;
-  setQuery: (q: string) => void;
-  filters: Filters;
-  setFilters: (f: Filters) => void;
-  show: Show;
-  setShow: (s: Show) => void;
-  hideClashes: boolean;
-  setHideClashes: (on: boolean) => void;
+  lineup: LineupQuery;
+  setLineup: (q: LineupQuery) => void;
   // The lineup page tells the header how to bring a day into view.
   registerDayJump: (jump: ((day: ElementKey) => void) | null) => void;
 };
@@ -106,10 +86,7 @@ function Shell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [saved, setSaved] = useState(() => new Set<string>());
   const [flagged, setFlagged] = useState(() => new Set<string>());
-  const [query, setQuery] = useState("");
-  const [filters, setFilters] = useState<Filters>(noFilters);
-  const [show, setShow] = useState<Show>("all");
-  const [hideClashes, setHideClashes] = useState(false);
+  const [lineup, setLineup] = useState<LineupQuery>(anyLineup);
   // The drawer only ever opens when you ask for it.
   const [open, setOpen] = useState(false);
   // A clash flag that pops up after an add, then fades.
@@ -135,6 +112,13 @@ function Shell({ children }: { children: ReactNode }) {
     setElement(day);
     if (dayJump.current) dayJump.current(day);
     else router.push(`/planner#${day}`);
+  }
+
+  // With nothing planned yet, the journey starts at the lineup.
+  function goToLineup() {
+    const lineup = document.getElementById("lineup");
+    if (lineup) lineup.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
+    else router.push("/planner#lineup");
   }
 
   // Adding never opens the drawer. An add that clashes raises a flag that fades on its own.
@@ -185,14 +169,8 @@ function Shell({ children }: { children: ReactNode }) {
     savedList,
     toggle,
     flag: (artist) => setFlagged((p) => toggled(p, artist)),
-    query,
-    setQuery,
-    filters,
-    setFilters,
-    show,
-    setShow,
-    hideClashes,
-    setHideClashes,
+    lineup,
+    setLineup,
     registerDayJump,
   };
 
@@ -238,16 +216,18 @@ function Shell({ children }: { children: ReactNode }) {
           <button
             ref={journeyButton}
             type="button"
-            aria-expanded={open}
-            aria-controls="journey-drawer"
-            onClick={() => openDrawer(!open)}
+            aria-expanded={saved.size > 0 ? open : undefined}
+            aria-controls={saved.size > 0 ? "journey-drawer" : undefined}
+            onClick={() => (saved.size > 0 ? openDrawer(!open) : goToLineup())}
             className={`order-2 ml-auto inline-flex shrink-0 cursor-pointer items-center gap-2 border-[1.5px] border-(--ink) bg-(--ink) px-3 py-2 font-medium text-(--paper) hover:brightness-[1.35] sm:px-4 lg:order-3 ${SHAPE.button} ${FOCUS}`}
           >
-            My journey
+            {saved.size === 0 ? "Start my journey" : "View my journey"}
             {/* The count stamps in each time it changes, so an add is felt even with the drawer shut. */}
-            <span key={saved.size} className="inline-flex motion-safe:animate-stamp">
-              <Badge tone="count" count={saved.size} />
-            </span>
+            {saved.size > 0 && (
+              <span key={saved.size} className="inline-flex motion-safe:animate-stamp">
+                <Badge tone="count" count={saved.size} />
+              </span>
+            )}
             {clashCount > 0 && <Seal className="h-6 w-6 text-sm" />}
             {clashCount > 0 && <span className="sr-only">{clashCount} clash{clashCount > 1 ? "es" : ""}</span>}
           </button>
@@ -266,9 +246,9 @@ function Shell({ children }: { children: ReactNode }) {
             ["/mood-boards/avatar", "Mood board"],
             ["/", "All work"],
           ].map(([href, label]) => (
-            <Link key={href} href={href} className={`rounded-sm underline underline-offset-4 ${FOCUS}`}>
+            <TextLink key={href} href={href}>
               {label}
-            </Link>
+            </TextLink>
           ))}
         </p>
       </footer>
@@ -350,27 +330,11 @@ export function LineupPage() {
   const [filtering, setFiltering] = useState(false);
   const { registerDayJump } = p;
 
-  // Search & filter: one test of who matches. Everyone else fades back on the poster.
-  const q = p.query.trim().toLowerCase();
-  const isShown = (s: FestivalSet) =>
-    matchesFilters(s, p.filters) &&
-    (q === "" || s.artist.toLowerCase().includes(q)) &&
-    (p.show === "all" || (p.show === "journey" ? p.saved.has(s.artist) : p.flagged.has(s.artist))) &&
-    !(p.hideClashes && !p.saved.has(s.artist) && clashesWith(s, p.savedList).length > 0);
+  const isShown = lineupMatcher(p.lineup, p.saved, p.flagged);
   const shownCount = LINEUP.filter(isShown).length;
-  const chips: ActiveFilter[] = [
-    ...filterChips(p.filters, p.setFilters),
-    ...(p.show !== "all"
-      ? [{ key: "show", label: p.show === "journey" ? "Only my journey" : "Only flagged", remove: () => p.setShow("all") }]
-      : []),
-    ...(p.hideClashes ? [{ key: "clash", label: "No clashes", remove: () => p.setHideClashes(false) }] : []),
-  ];
-  const narrowed = chips.length > 0 || q !== "";
-  const clearFilters = () => {
-    p.setFilters(noFilters());
-    p.setShow("all");
-    p.setHideClashes(false);
-  };
+  const chips = lineupChips(p.lineup, p.setLineup);
+  const narrowed = chips.length > 0 || p.lineup.query.trim() !== "";
+
 
   // A day button scrolls the page to that day's band, just under the pinned lineup bar.
   useEffect(() => {
@@ -387,7 +351,9 @@ export function LineupPage() {
           setElement(fromHash);
           jump(fromHash);
         }, 60)
-      : undefined;
+      : (fromHash as string) === "lineup"
+        ? setTimeout(() => document.getElementById("lineup")?.scrollIntoView({ block: "start" }), 60)
+        : undefined;
     return () => {
       clearTimeout(arrive);
       registerDayJump(null);
@@ -448,44 +414,21 @@ export function LineupPage() {
               Sunday.
             </p>
 
-            <section id="lineup" aria-labelledby="lineup-title" className="mt-6 sm:mt-8">
+            <section id="lineup" aria-labelledby="lineup-title" className="mt-6 scroll-mt-[115px] sm:mt-8 lg:scroll-mt-[68px]">
               {/* The heading, search, and filters stay pinned under the header while the lineup scrolls. */}
               <div ref={bar} className="sticky top-[115px] z-20 -mx-4 bg-(--parchment) px-4 pt-2 pb-3 sm:-mx-8 sm:px-8 lg:top-[68px]">
                 <h2 id="lineup-title" className={TYPE.heading}>
                   The lineup
                 </h2>
-                <div className="mt-3 flex flex-wrap items-center gap-3">
-                  <div className="relative min-w-0 grow basis-60 sm:max-w-md">
-                    <SearchIcon className="pointer-events-none absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-(--ink-muted)" />
-                    <TextField
-                      label="Search artists"
-                      hideLabel
-                      type="search"
-                      placeholder="Search artists"
-                      value={p.query}
-                      onChange={(e) => p.setQuery(e.target.value)}
-                      style={{ paddingLeft: "2.75rem" }}
-                    />
-                  </div>
-                  <Button
-                    variant="secondary"
-                    aria-haspopup="dialog"
-                    aria-label={chips.length > 0 ? `Filters, ${chips.length} active` : undefined}
-                    onClick={() => setFiltering(true)}
-                  >
-                    <FilterIcon className="h-5 w-5" />
-                    Filters
-                    {chips.length > 0 && <Badge tone="count" count={chips.length} />}
-                  </Button>
-                  <p className="text-sm text-(--ink-muted)" aria-live="polite">
-                    {!narrowed ? `${LINEUP.length} artists` : shownCount === 0 ? "No artists match" : `${shownCount} of ${LINEUP.length} artists`}
-                  </p>
+                <div className="mt-3">
+                  <LineupSearchBar
+                    lineup={p.lineup}
+                    onChange={p.setLineup}
+                    chips={chips}
+                    shownCount={shownCount}
+                    onOpenFilters={() => setFiltering(true)}
+                  />
                 </div>
-                {chips.length > 0 && (
-                  <div className="mt-3">
-                    <FilterChips chips={chips} onClear={clearFilters} />
-                  </div>
-                )}
               </div>
               <div ref={box} className="mt-2">
                 <LineupPoster
@@ -502,97 +445,23 @@ export function LineupPage() {
         </div>
       </main>
 
-      <Modal open={filtering} onClose={() => setFiltering(false)} labelledBy="filter-title" width="w-[min(46rem,calc(100%-2rem))]">
-        <div className={`flex max-h-[calc(100dvh-2rem)] flex-col border-[1.5px] border-(--ink) bg-(--paper) ${SHAPE.card}`}>
-          <header className="flex items-start justify-between gap-3 border-b-[1.5px] border-dashed border-(--line) px-5 pt-4 pb-3 sm:px-6">
-            <div>
-              <p className={`${TYPE.label} text-(--ink-muted)`}>The lineup</p>
-              <h2 id="filter-title" className={`mt-1 ${TYPE.heading}`}>
-                Filters
-              </h2>
-            </div>
-            <IconButton label="Close" onClick={() => setFiltering(false)}>
-              <CloseIcon />
-            </IconButton>
-          </header>
-          <div className="flex-1 space-y-7 overflow-y-auto px-5 py-5 sm:px-6">
-            <FilterGroups filters={p.filters} onChange={p.setFilters} />
-            <div className="grid gap-6 sm:grid-cols-3">
-              <fieldset>
-                <legend className={`${TYPE.label} text-(--ink-muted)`}>Show</legend>
-                <div className="mt-3 space-y-2.5">
-                  <Radio name="show" value="all" checked={p.show === "all"} onChange={() => p.setShow("all")} label="Everyone" />
-                  <Radio
-                    name="show"
-                    value="journey"
-                    checked={p.show === "journey"}
-                    onChange={() => p.setShow("journey")}
-                    label={<Counted name="Only my journey" count={p.saved.size} />}
-                  />
-                  <Radio
-                    name="show"
-                    value="flagged"
-                    checked={p.show === "flagged"}
-                    onChange={() => p.setShow("flagged")}
-                    label={<Counted name="Only flagged" count={p.flagged.size} />}
-                  />
-                </div>
-              </fieldset>
-              <fieldset className="sm:col-span-2">
-                <legend className={`${TYPE.label} text-(--ink-muted)`}>Clashes</legend>
-                <div className="mt-3">
-                  <Checkbox
-                    label="Hide sets that clash with my journey"
-                    checked={p.hideClashes}
-                    onChange={(e) => p.setHideClashes(e.target.checked)}
-                  />
-                </div>
-              </fieldset>
-            </div>
-          </div>
-          <footer className="flex flex-wrap items-center justify-between gap-3 border-t-[1.5px] border-dashed border-(--line) px-5 py-4 sm:px-6">
-            <Button variant="secondary" onClick={clearFilters} disabled={chips.length === 0}>
-              Clear all
-            </Button>
-            <Button onClick={() => setFiltering(false)}>
-              {shownCount === LINEUP.length ? "Show all 100 artists" : `Show ${shownCount} artist${shownCount === 1 ? "" : "s"}`}
-            </Button>
-          </footer>
-        </div>
-      </Modal>
+      <FilterDialog
+        open={filtering}
+        onClose={() => setFiltering(false)}
+        lineup={p.lineup}
+        onChange={p.setLineup}
+        activeCount={chips.length}
+        shownCount={shownCount}
+        savedCount={p.saved.size}
+        flaggedCount={p.flagged.size}
+      />
     </>
   );
 }
 
-function Counted({ name, count }: { name: string; count: number }) {
-  return (
-    <span className="flex items-center gap-2">
-      {name}
-      <span className="text-sm text-(--ink-muted) tabular-nums">{count}</span>
-    </span>
-  );
-}
+/* My journey: the drawer, and the sheet inside it ------------------------------------ */
 
-/* My journey: the drawer ---------------------------------------------------------- */
-
-function JourneyDrawer({
-  open,
-  focusOnOpen,
-  onOpenChange,
-  tab,
-  onTab,
-  saved,
-  savedList,
-  flaggedList,
-  warn,
-  onWarn,
-  onToggle,
-  onUnflag,
-  onKeep,
-}: {
-  open: boolean;
-  focusOnOpen: boolean;
-  onOpenChange: (open: boolean) => void;
+type SheetProps = {
   tab: "journey" | "interested";
   onTab: (tab: "journey" | "interested") => void;
   saved: Set<string>;
@@ -603,22 +472,25 @@ function JourneyDrawer({
   onToggle: (artist: string) => void;
   onUnflag: (artist: string) => void;
   onKeep: (artist: string) => void;
-}) {
-  const { element, setElement } = useElement();
-  const el = ELEMENTS[element];
+};
+
+function JourneyDrawer({
+  open,
+  focusOnOpen,
+  onOpenChange,
+  ...sheet
+}: {
+  open: boolean;
+  focusOnOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+} & SheetProps) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const wasOpen = useRef(false);
-  const id = useId();
 
   useEffect(() => {
     if (open && !wasOpen.current && focusOnOpen) closeRef.current?.focus();
     wasOpen.current = open;
   }, [open, focusOnOpen]);
-
-  const daySaved = savedList.filter((s) => s.day === element);
-  const clash = warn ? daySaved.filter((s) => clashesWith(s, savedList).length > 0) : [];
-  const firstSlot = clash[0]?.time;
-  const firstClash = firstSlot ? clash.filter((s) => s.time === firstSlot) : [];
 
   return (
     <div
@@ -631,6 +503,39 @@ function JourneyDrawer({
         onKeyDown={(e) => e.key === "Escape" && onOpenChange(false)}
         className="pointer-events-auto flex h-full flex-col border-l-[1.5px] border-(--ink) bg-(--paper)"
       >
+        <JourneySheet {...sheet} onClose={() => onOpenChange(false)} closeRef={closeRef} />
+      </aside>
+    </div>
+  );
+}
+
+// What My journey holds: Journey and Interested tabs, the days pinned on top, any clash
+// to resolve, the day's path, next up, the map, balance, and the warnings toggle.
+export function JourneySheet({
+  tab,
+  onTab,
+  saved,
+  savedList,
+  flaggedList,
+  warn,
+  onWarn,
+  onToggle,
+  onUnflag,
+  onKeep,
+  onClose,
+  closeRef,
+}: SheetProps & { onClose?: () => void; closeRef?: Ref<HTMLButtonElement> }) {
+  const { element, setElement } = useElement();
+  const el = ELEMENTS[element];
+  const id = useId();
+
+  const daySaved = savedList.filter((s) => s.day === element);
+  const clash = warn ? daySaved.filter((s) => clashesWith(s, savedList).length > 0) : [];
+  const firstSlot = clash[0]?.time;
+  const firstClash = firstSlot ? clash.filter((s) => s.time === firstSlot) : [];
+
+  return (
+    <>
         <header className="border-b-[1.5px] border-dashed border-(--line) px-5 pt-4 pb-3">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -639,9 +544,11 @@ function JourneyDrawer({
               </p>
               <h2 className={`mt-1 ${TYPE.heading}`}>My journey</h2>
             </div>
-            <IconButton ref={closeRef} label="Close my journey" onClick={() => onOpenChange(false)}>
-              <CloseIcon />
-            </IconButton>
+            {onClose && (
+              <IconButton ref={closeRef} label="Close my journey" onClick={onClose}>
+                <CloseIcon />
+              </IconButton>
+            )}
           </div>
           <div
             role="tablist"
@@ -770,7 +677,6 @@ function JourneyDrawer({
         <footer className="border-t-[1.5px] border-dashed border-(--line) px-5 py-4">
           <Toggle label="Warn me about clashes" checked={warn} onChange={onWarn} />
         </footer>
-      </aside>
-    </div>
+    </>
   );
 }
