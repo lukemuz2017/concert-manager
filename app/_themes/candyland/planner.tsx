@@ -8,7 +8,6 @@ import {
   AddButton,
   Badge,
   Button,
-  CheckIcon,
   Checkbox,
   Chip,
   CloseIcon,
@@ -16,145 +15,75 @@ import {
   FOCUS,
   IconButton,
   Radio,
-  Tabs,
   TextField,
   Toggle,
   WarningIcon,
 } from "./ui";
 
-// The planner: a poster per day, a detail popover, search, and the plan drawer.
-// The design system shows it in a frame (`contained`); the site uses it full page.
-
-type Status = "planned" | "crash" | null;
+// The planner, shopped like a store: performers as cards, day by day, each with
+// an Add button, and the plan drawer as the cart. The design system shows it in
+// a frame (`contained`); the site uses it full page.
 
 function names(sets: FestivalSet[]) {
   return sets.map((s) => s.artist).join(" and ");
 }
 
-/* Poster ----------------------------------------------------------------- */
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-// The festival lockup, with the candy-stripe lettering from the mood board.
-function Logo() {
-  return (
-    <span
-      className={`block ${TYPE.display}`}
-      style={{
-        backgroundImage: "repeating-linear-gradient(115deg, #E63946 0 7px, #FF8FC4 7px 12px)",
-        WebkitBackgroundClip: "text",
-        backgroundClip: "text",
-        color: "transparent",
-        WebkitTextStroke: "1.5px var(--text)",
-      }}
-    >
-      Sugar Rush
-    </span>
-  );
-}
+/* Performer card ------------------------------------------------------------ */
 
-// The board's rainbow path. All six stage colors together mean the whole festival, not one stage.
-function BoardPath() {
-  return (
-    // contain:inline-size so the row clips on narrow screens instead of widening the page.
-    <div aria-hidden="true" className="mt-10 flex h-8 items-center justify-center gap-1.5 overflow-hidden [contain:inline-size]">
-      {Array.from({ length: 22 }, (_, i) => (
-        <span
-          key={i}
-          className="h-4 w-4 shrink-0 rounded-[4px] border-2 border-white"
-          style={{ background: STAGES[i % STAGES.length].hex, transform: `translateY(${Math.sin(i * 0.7) * 6}px)` }}
-        />
-      ))}
-    </div>
-  );
-}
-
-function PosterName({
+// Big name, stage and time underneath, Add in the corner. Headliners get double
+// width and a Display-size name, so billing still reads at a glance.
+function PerformerCard({
   set,
-  status,
-  active,
-  onPick,
-  className,
+  added,
+  clashes,
+  onToggle,
+  onDetails,
 }: {
   set: FestivalSet;
-  status: Status;
-  active: boolean;
-  onPick: (set: FestivalSet, anchor: HTMLElement) => void;
-  className: string;
+  added: boolean;
+  clashes: FestivalSet[];
+  onToggle: () => void;
+  onDetails: (anchor: HTMLElement) => void;
 }) {
+  const headliner = tier(set) === 1;
   return (
-    <button
-      type="button"
-      aria-haspopup="dialog"
-      aria-expanded={active}
-      onClick={(e) => onPick(set, e.currentTarget)}
-      className={`inline-flex cursor-pointer items-center gap-[0.25em] rounded-xl px-1.5 py-0.5 transition duration-75 hover:bg-(--surface) active:scale-95 ${FOCUS} ${active ? "bg-(--surface)" : ""} ${className}`}
+    <article
+      className={`flex flex-col rounded-2xl border-l-[10px] bg-(--surface) p-4 sm:p-5 ${headliner ? "sm:col-span-2" : ""} ${added ? "ring-2 ring-(--text)" : ""}`}
+      style={{ borderLeftColor: set.stage.hex, boxShadow: shadow.card }}
     >
-      {status === "crash" && <WarningIcon className="h-[0.7em] w-[0.7em]" />}
-      {status === "planned" && <CheckIcon className="h-[0.75em] w-[0.75em]" />}
-      {set.artist}
-      {status && <span className="sr-only">{status === "crash" ? " (Sugar Crash)" : " (in your plan)"}</span>}
-    </button>
-  );
-}
-
-// One day's bill. Billing comes from the slot, so type size does the job a
-// headliner badge would: 8:30 in Display, 5:30 and 7:00 in Heading, the rest in caps.
-export function DayPoster({
-  day,
-  status,
-  activeArtist,
-  onPick,
-}: {
-  day: Day;
-  status: (set: FestivalSet) => Status;
-  activeArtist: string | null;
-  onPick: (set: FestivalSet, anchor: HTMLElement) => void;
-}) {
-  const id = useId();
-  const bill = (t: 1 | 2 | 3) =>
-    LINEUP.filter((s) => s.day === day && tier(s) === t).sort(
-      (a, b) => SLOTS.indexOf(b.time) - SLOTS.indexOf(a.time) || STAGES.indexOf(a.stage) - STAGES.indexOf(b.stage),
-    );
-  const name = (s: FestivalSet, className: string) => (
-    <PosterName
-      set={s}
-      status={status(s)}
-      active={activeArtist === s.artist}
-      onPick={onPick}
-      className={className}
-    />
-  );
-
-  return (
-    <section
-      aria-labelledby={`${id}-title`}
-      className="overflow-hidden rounded-[28px] bg-(--wash) px-3 py-8 text-center sm:px-10 sm:py-12"
-    >
-      <h2 id={`${id}-title`}>
-        <Logo />
-        <span className="sr-only">, {DAY_NAMES[day]} lineup</span>
-      </h2>
-      <p className="mt-2 text-(--muted)">Four days on the Candy Land board · Thu–Sun</p>
-      <p className={`mt-6 inline-block rounded-full bg-(--text) px-4 py-1.5 text-(--bg) ${TYPE.label}`}>
-        {DAY_NAMES[day]}
+      <div className="flex min-h-6 flex-wrap items-center justify-between gap-2">
+        <p className={`${TYPE.label} text-(--muted)`}>
+          {set.time}
+          {headliner && " · Headliner"}
+        </p>
+        {added && clashes.length > 0 && <Badge tone="crash" />}
+      </div>
+      <h4 className="mt-2">
+        <button
+          type="button"
+          aria-haspopup="dialog"
+          onClick={(e) => onDetails(e.currentTarget)}
+          className={`cursor-pointer rounded-lg text-left decoration-[3px] underline-offset-4 hover:underline ${headliner ? TYPE.display : TYPE.heading} ${FOCUS}`}
+        >
+          {set.artist}
+        </button>
+      </h4>
+      <p className="mt-2 flex flex-wrap items-center gap-x-1.5 text-(--muted)">
+        <Dot stage={set.stage} />
+        <span className="font-bold text-(--text)">{set.stage.name}</span>· {set.genre}
       </p>
-
-      <ul className="mt-4 flex flex-col items-center gap-1">
-        {bill(1).map((s) => (
-          <li key={s.artist}>{name(s, `${TYPE.display} uppercase`)}</li>
-        ))}
-      </ul>
-      <ul className="mx-auto mt-6 flex max-w-3xl flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
-        {bill(2).map((s) => (
-          <li key={s.artist}>{name(s, TYPE.heading)}</li>
-        ))}
-      </ul>
-      <ul className="mx-auto mt-5 flex max-w-3xl flex-wrap items-center justify-center gap-x-4 gap-y-1">
-        {bill(3).map((s) => (
-          <li key={s.artist}>{name(s, "font-extrabold tracking-wide uppercase")}</li>
-        ))}
-      </ul>
-      <BoardPath />
-    </section>
+      {!added && clashes.length > 0 && (
+        <p className="mt-2 flex items-center gap-1.5 text-sm font-bold">
+          <WarningIcon className="h-4 w-4" />
+          Clashes with {names(clashes)}
+        </p>
+      )}
+      <div className="mt-auto flex justify-end pt-4 pb-[5px]">
+        <AddButton added={added} onToggle={onToggle} label="Add" addedLabel="Added" artist={set.artist} />
+      </div>
+    </article>
   );
 }
 
@@ -273,204 +202,7 @@ export function DetailPopover({
   );
 }
 
-/* Add to plan: search ---------------------------------------------------- */
-
-const SORTS = [
-  ["time", "Time"],
-  ["stage", "Stage"],
-  ["name", "Name"],
-] as const;
-type Sort = (typeof SORTS)[number][0];
-
-function SearchResult({
-  set,
-  sameDay,
-  planned,
-  clashes,
-  onToggle,
-  onGoToDay,
-}: {
-  set: FestivalSet;
-  sameDay: boolean;
-  planned: boolean;
-  clashes: FestivalSet[];
-  onToggle: () => void;
-  onGoToDay: () => void;
-}) {
-  return (
-    <li
-      className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl border-l-[6px] bg-(--surface) p-3 pl-4"
-      style={{ borderLeftColor: set.stage.hex, boxShadow: shadow.card }}
-    >
-      <div className="min-w-0 flex-1 basis-48">
-        <p className="font-bold">{set.artist}</p>
-        <p className="flex flex-wrap items-center gap-x-1.5 text-(--muted)">
-          {set.day} · {set.time} · <Dot stage={set.stage} />
-          {set.stage.name}
-        </p>
-        {sameDay && clashes.length > 0 && (
-          <p className="mt-1 flex items-center gap-1.5 font-bold">
-            <WarningIcon className="h-4 w-4" />
-            {planned ? "Sugar Crash with" : "Clashes with"} {names(clashes)}
-          </p>
-        )}
-      </div>
-      {sameDay ? (
-        <div className="pb-[5px]">
-          <AddButton added={planned} onToggle={onToggle} label="Add" addedLabel="Added" artist={set.artist} />
-        </div>
-      ) : (
-        <Button variant="secondary" onClick={onGoToDay}>
-          Go to {DAY_NAMES[set.day]}
-        </Button>
-      )}
-    </li>
-  );
-}
-
-function AddToPlan({
-  day,
-  plan,
-  planned,
-  alerts,
-  onToggle,
-  onGoToDay,
-}: {
-  day: Day;
-  plan: Set<string>;
-  planned: FestivalSet[];
-  alerts: boolean;
-  onToggle: (set: FestivalSet) => void;
-  onGoToDay: (day: Day) => void;
-}) {
-  const [query, setQuery] = useState("");
-  const [stages, setStages] = useState(() => new Set<string>());
-  const [sort, setSort] = useState<Sort>("time");
-  const [hideClashes, setHideClashes] = useState(false);
-  const id = useId();
-
-  const q = query.trim().toLowerCase();
-  const searching = q.length > 0 || stages.size > 0;
-  const clashFor = (s: FestivalSet) => (alerts ? clashesWith(s, planned) : []);
-
-  // A query searches every day; stage chips alone show the current day.
-  const results = LINEUP.filter(
-    (s) =>
-      (q ? s.artist.toLowerCase().includes(q) : s.day === day) &&
-      (stages.size === 0 || stages.has(s.stage.name)) &&
-      !(hideClashes && !plan.has(s.artist) && clashesWith(s, planned).length > 0),
-  ).sort((a, b) => {
-    if (sort === "name") return a.artist.localeCompare(b.artist);
-    const byTime = DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || SLOTS.indexOf(a.time) - SLOTS.indexOf(b.time);
-    if (sort === "stage") return STAGES.indexOf(a.stage) - STAGES.indexOf(b.stage) || byTime;
-    return byTime;
-  });
-  const today = results.filter((s) => s.day === day);
-  const otherDays = results.filter((s) => s.day !== day);
-
-  const list = (sets: FestivalSet[]) => (
-    <ul className="mt-3 space-y-3">
-      {sets.map((s) => (
-        <SearchResult
-          key={s.artist}
-          set={s}
-          sameDay={s.day === day}
-          planned={plan.has(s.artist)}
-          clashes={clashFor(s)}
-          onToggle={() => onToggle(s)}
-          onGoToDay={() => onGoToDay(s.day)}
-        />
-      ))}
-    </ul>
-  );
-
-  return (
-    <section aria-labelledby={`${id}-title`} className="mt-10">
-      <h2 id={`${id}-title`} className={TYPE.heading}>
-        Add to your plan
-      </h2>
-      <p className="mt-1 text-(--muted)">
-        Tap a name on the poster, search every artist, or pick stages to see who plays there on{" "}
-        {DAY_NAMES[day]}.
-      </p>
-
-      <div className="mt-5 max-w-xl">
-        <TextField
-          label="Search artists"
-          type="search"
-          placeholder="Try “mint” or “licorice”"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-      </div>
-      <div className="mt-4 flex flex-wrap gap-2">
-        {STAGES.map((s) => (
-          <Chip
-            key={s.name}
-            stage={s}
-            selected={stages.has(s.name)}
-            onToggle={() =>
-              setStages((prev) => {
-                const next = new Set(prev);
-                if (next.has(s.name)) next.delete(s.name);
-                else next.add(s.name);
-                return next;
-              })
-            }
-          />
-        ))}
-      </div>
-      <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-3">
-        <fieldset className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <legend className="sr-only">Sort results by</legend>
-          <span aria-hidden="true" className={`${TYPE.label} text-(--muted)`}>
-            Sort by
-          </span>
-          {SORTS.map(([value, label]) => (
-            <Radio
-              key={value}
-              name={`${id}-sort`}
-              value={value}
-              checked={sort === value}
-              onChange={() => setSort(value)}
-              label={label}
-            />
-          ))}
-        </fieldset>
-        <Checkbox
-          label="Hide artists that would clash"
-          checked={hideClashes}
-          onChange={(e) => setHideClashes(e.target.checked)}
-        />
-      </div>
-
-      <div aria-live="polite">
-        {!searching ? null : results.length === 0 ? (
-          <p className="mt-5 rounded-2xl bg-(--surface) p-5 text-(--muted)" style={{ boxShadow: shadow.card }}>
-            No artists match{q ? ` “${query.trim()}”` : " those stages"}.
-          </p>
-        ) : (
-          <div className="mt-5">
-            {today.length > 0 && (
-              <>
-                <p className={`${TYPE.label} text-(--muted)`}>{DAY_NAMES[day]}</p>
-                {list(today)}
-              </>
-            )}
-            {otherDays.length > 0 && (
-              <>
-                <p className={`${TYPE.label} mt-6 text-(--muted)`}>On other days</p>
-                {list(otherDays)}
-              </>
-            )}
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
-/* Plan drawer ------------------------------------------------------------ */
+/* Plan drawer: the cart ------------------------------------------------------ */
 
 function PlanItem({
   set,
@@ -523,6 +255,7 @@ export function PlanDrawer({
   open,
   onOpenChange,
   day,
+  onDay,
   planned,
   alerts,
   onAlerts,
@@ -533,6 +266,7 @@ export function PlanDrawer({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   day: Day;
+  onDay: (day: Day) => void;
   planned: FestivalSet[];
   alerts: boolean;
   onAlerts: (on: boolean) => void;
@@ -548,7 +282,7 @@ export function PlanDrawer({
   const pos = contained ? "absolute" : "fixed";
 
   const daySets = planned.filter((s) => s.day === day);
-  const crashes = alerts ? SLOTS.filter((t) => daySets.filter((s) => s.time === t).length > 1).length : 0;
+  const crashes = alerts ? DAYS.flatMap((d) => SLOTS.filter((t) => planned.filter((s) => s.day === d && s.time === t).length > 1)).length : 0;
 
   useEffect(() => {
     if (open && focusOnOpen.current) {
@@ -578,8 +312,8 @@ export function PlanDrawer({
           onClick={show}
           className={`${pos} inset-x-3 bottom-3 z-20 flex cursor-pointer items-center gap-3 rounded-2xl border-2 border-(--text) bg-(--surface) px-4 py-3 text-left font-bold shadow-[0_4px_0_var(--text)] active:translate-y-[4px] active:shadow-none sm:hidden ${FOCUS}`}
         >
-          <Badge tone="count" count={daySets.length} />
-          <span className="flex-1">{DAY_NAMES[day]} plan</span>
+          <Badge tone="count" count={planned.length} />
+          <span className="flex-1">My plan</span>
           {crashes > 0 && <Badge tone="crash" />}
           <svg aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4">
             <path d="M3.5 10l4.5-4.5 4.5 4.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -596,10 +330,10 @@ export function PlanDrawer({
           aria-controls={panelId}
           aria-expanded={open}
           onClick={() => (open ? hide() : show())}
-          className={`pointer-events-auto absolute top-6 right-full hidden cursor-pointer flex-col items-center gap-2 rounded-l-2xl border-2 border-r-0 border-(--text) bg-(--surface) px-2 py-3 font-bold shadow-[0_4px_0_var(--text)] hover:bg-(--wash) sm:flex ${FOCUS}`}
+          className={`pointer-events-auto absolute top-6 right-full hidden cursor-pointer flex-col items-center gap-2 rounded-l-2xl border-2 border-r-0 border-(--text) bg-(--surface) px-1 py-3 font-bold shadow-[0_4px_0_var(--text)] hover:bg-(--wash) sm:flex ${FOCUS}`}
         >
-          <span className="rotate-180 [writing-mode:vertical-rl]">{open ? "Hide plan" : "Plan"}</span>
-          <Badge tone="count" count={daySets.length} />
+          <span className="rotate-180 [writing-mode:vertical-rl]">{open ? "Hide plan" : "My plan"}</span>
+          <Badge tone="count" count={planned.length} />
           {crashes > 0 && (
             <>
               <WarningIcon className="h-4 w-4" />
@@ -610,35 +344,51 @@ export function PlanDrawer({
 
         <aside
           id={panelId}
-          aria-label={`Your ${DAY_NAMES[day]} plan`}
+          aria-label="My plan"
           inert={!open}
           onKeyDown={(e) => e.key === "Escape" && hide()}
           className="pointer-events-auto flex h-full flex-col border-l-2 border-(--text) bg-(--bg) shadow-[-6px_0_0_rgba(59,31,43,0.15)]"
         >
-          <header className="flex items-start justify-between gap-3 border-b-2 border-[#3B1F2B]/10 px-5 py-4">
-            <div>
-              <p className={`${TYPE.label} text-(--muted)`}>Your plan</p>
-              <h2 className={`mt-1 ${TYPE.heading}`}>{DAY_NAMES[day]}</h2>
+          <header className="border-b-2 border-[#3B1F2B]/10 px-5 py-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className={`${TYPE.label} text-(--muted)`}>My plan · {planned.length} sets</p>
+                <h2 className={`mt-1 ${TYPE.heading}`}>{DAY_NAMES[day]}</h2>
+              </div>
+              <IconButton ref={closeRef} label="Close plan" onClick={hide}>
+                <CloseIcon />
+              </IconButton>
             </div>
-            <IconButton ref={closeRef} label="Close plan" onClick={hide}>
-              <CloseIcon />
-            </IconButton>
+            <div role="group" aria-label="Plan day" className="mt-3 flex gap-1.5">
+              {DAYS.map((d) => {
+                const count = planned.filter((s) => s.day === d).length;
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    aria-pressed={d === day}
+                    onClick={() => onDay(d)}
+                    className={`flex-1 cursor-pointer rounded-full border-2 px-2 py-1 text-sm font-bold transition duration-75 ${FOCUS} ${d === day ? "border-(--text) bg-(--text) text-(--bg)" : "border-(--border) bg-(--surface) hover:bg-(--wash)"}`}
+                  >
+                    {d}
+                    {count > 0 && <span className="ml-1 tabular-nums opacity-80">{count}</span>}
+                  </button>
+                );
+              })}
+            </div>
           </header>
 
           <div className="flex-1 overflow-y-auto px-5 py-3">
             {daySets.length === 0 && (
               <p className="mb-2 rounded-2xl bg-(--wash) p-4 text-(--muted)">
-                Nothing on {DAY_NAMES[day]} yet. Tap a name on the poster to add it.
+                Nothing on {DAY_NAMES[day]} yet. Add a set from the lineup and it lands here.
               </p>
             )}
             <ol>
               {SLOTS.map((slot) => {
                 const here = daySets.filter((s) => s.time === slot);
                 return (
-                  <li
-                    key={slot}
-                    className="grid grid-cols-[4.5rem_1fr] items-start gap-3 border-b-2 border-[#3B1F2B]/10 py-3 last:border-b-0"
-                  >
+                  <li key={slot} className="grid grid-cols-[4.5rem_1fr] items-start gap-3 border-b-2 border-[#3B1F2B]/10 py-3 last:border-b-0">
                     <span className={`${TYPE.label} pt-3 text-(--muted)`}>{slot}</span>
                     {here.length === 0 ? (
                       <p className="py-2.5 text-(--muted)">Free</p>
@@ -677,17 +427,44 @@ export function PlanDrawer({
 
 // Everything together. Nothing is saved: React state only, so it resets on reload.
 export function Planner({ initialPlan = [], contained = false }: { initialPlan?: string[]; contained?: boolean }) {
-  const [day, setDay] = useState<Day>("Thu");
   const [plan, setPlan] = useState(() => new Set(initialPlan));
+  const [activeDay, setActiveDay] = useState<Day>("Thu");
+  const [drawerDay, setDrawerDay] = useState<Day>("Thu");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [alerts, setAlerts] = useState(true);
   const [picked, setPicked] = useState<{ set: FestivalSet; anchor: HTMLElement } | null>(null);
+  const [query, setQuery] = useState("");
+  const [stages, setStages] = useState(() => new Set<string>());
+  const [show, setShow] = useState<"all" | "mine">("all");
+  const [hideClashes, setHideClashes] = useState(false);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const sectionRefs = useRef<Partial<Record<Day, HTMLElement | null>>>({});
+  const id = useId();
   // The drawer opens on its own for the first add, then only when an add causes a Sugar Crash.
   const drawerSeen = useRef(false);
 
   const planned = LINEUP.filter((s) => plan.has(s.artist));
-  const status = (s: FestivalSet): Status =>
-    !plan.has(s.artist) ? null : alerts && clashesWith(s, planned).length > 0 ? "crash" : "planned";
+  const clashFor = (s: FestivalSet) => (alerts ? clashesWith(s, planned) : []);
+
+  // Scroll spy: the day whose section is at the top of the view lights up in the day bar.
+  useEffect(() => {
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) if (e.isIntersecting) setActiveDay((e.target as HTMLElement).dataset.day as Day);
+      },
+      { root: contained ? scrollerRef.current : null, rootMargin: "0px 0px -75% 0px" },
+    );
+    for (const d of DAYS) {
+      const el = sectionRefs.current[d];
+      if (el) io.observe(el);
+    }
+    return () => io.disconnect();
+  }, [contained]);
+
+  function jumpTo(day: Day) {
+    setActiveDay(day);
+    sectionRefs.current[day]?.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
+  }
 
   function toggle(set: FestivalSet) {
     if (plan.has(set.artist)) {
@@ -702,6 +479,7 @@ export function Planner({ initialPlan = [], contained = false }: { initialPlan?:
     setPlan((prev) => new Set(prev).add(set.artist));
     if (!drawerSeen.current || crash) {
       drawerSeen.current = true;
+      setDrawerDay(set.day);
       setDrawerOpen(true);
     }
   }
@@ -714,41 +492,135 @@ export function Planner({ initialPlan = [], contained = false }: { initialPlan?:
     });
   }
 
-  function chooseDay(next: Day) {
-    setPicked(null);
-    setDay(next);
-  }
+  const q = query.trim().toLowerCase();
+  const visible = (s: FestivalSet) =>
+    s.artist.toLowerCase().includes(q) &&
+    (stages.size === 0 || stages.has(s.stage.name)) &&
+    (show === "all" || plan.has(s.artist)) &&
+    !(hideClashes && !plan.has(s.artist) && clashesWith(s, planned).length > 0);
 
   return (
     <div
       className={
         contained
-          ? "relative overflow-hidden rounded-[28px] bg-(--bg) p-3 pb-24 ring-2 ring-[#3B1F2B]/10 sm:p-6 sm:pr-16"
-          : "pb-24 sm:pr-14 sm:pb-0"
+          ? "relative h-[46rem] overflow-hidden rounded-[28px] bg-(--bg) ring-2 ring-[#3B1F2B]/10"
+          : "pb-24 sm:pb-0"
       }
     >
-      <Tabs label="Festival day" tabs={[...DAYS]} selected={day} onSelect={(d) => chooseDay(d as Day)}>
-        <DayPoster
-          day={day}
-          status={status}
-          activeArtist={picked?.set.artist ?? null}
-          onPick={(set, anchor) => setPicked({ set, anchor })}
-        />
-        <AddToPlan
-          day={day}
-          plan={plan}
-          planned={planned}
-          alerts={alerts}
-          onToggle={toggle}
-          onGoToDay={chooseDay}
-        />
-      </Tabs>
+      <div ref={scrollerRef} className={contained ? "h-full overflow-y-auto px-3 pb-24 sm:px-6" : ""}>
+        {/* Filters */}
+        <div className="grid gap-5 pt-4 sm:pt-6 lg:grid-cols-[1fr_auto] lg:items-end">
+          <div className="max-w-md">
+            <TextField
+              label="Search performers"
+              type="search"
+              placeholder="Try “mint” or “licorice”"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            <fieldset className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <legend className="sr-only">Show</legend>
+              <Radio name={`${id}-show`} value="all" checked={show === "all"} onChange={() => setShow("all")} label="Everyone" />
+              <Radio name={`${id}-show`} value="mine" checked={show === "mine"} onChange={() => setShow("mine")} label="Only my plan" />
+            </fieldset>
+            <Checkbox label="Hide clashes" checked={hideClashes} onChange={(e) => setHideClashes(e.target.checked)} />
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {STAGES.map((s) => (
+            <Chip
+              key={s.name}
+              stage={s}
+              selected={stages.has(s.name)}
+              onToggle={() =>
+                setStages((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(s.name)) next.delete(s.name);
+                  else next.add(s.name);
+                  return next;
+                })
+              }
+            />
+          ))}
+        </div>
+
+        {/* The day bar sticks while the lineup scrolls under it. */}
+        <nav
+          aria-label="Days"
+          className="sticky top-0 z-10 -mx-3 mt-5 border-b-2 border-[#3B1F2B]/10 bg-(--bg)/95 px-3 py-3 backdrop-blur sm:-mx-6 sm:px-6"
+        >
+          <div className="flex gap-2 overflow-x-auto">
+            {DAYS.map((d) => {
+              const count = planned.filter((s) => s.day === d).length;
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  aria-current={d === activeDay ? "true" : undefined}
+                  onClick={() => jumpTo(d)}
+                  className={`shrink-0 cursor-pointer rounded-full border-2 px-4 py-1.5 font-bold transition duration-75 active:scale-95 ${FOCUS} ${d === activeDay ? "border-(--text) bg-(--text) text-(--bg)" : "border-(--border) bg-(--surface) hover:bg-(--wash)"}`}
+                >
+                  {DAY_NAMES[d]}
+                  {count > 0 && <span className="ml-1.5 tabular-nums opacity-80">· {count}</span>}
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+
+        {DAYS.map((d) => {
+          const daySets = LINEUP.filter((s) => s.day === d && visible(s));
+          return (
+            <section
+              key={d}
+              data-day={d}
+              ref={(el) => {
+                sectionRefs.current[d] = el;
+              }}
+              aria-labelledby={`${id}-${d}`}
+              className="scroll-mt-20 pt-8"
+            >
+              <h3 id={`${id}-${d}`} className={TYPE.display}>
+                {DAY_NAMES[d]}
+              </h3>
+              {daySets.length === 0 && (
+                <p className="mt-4 rounded-2xl bg-(--wash) px-4 py-6 text-center text-(--muted)">
+                  Nothing on {DAY_NAMES[d]} matches these filters.
+                </p>
+              )}
+              {SLOTS.map((slot) => {
+                const sets = daySets.filter((s) => s.time === slot).sort((a, b) => STAGES.indexOf(a.stage) - STAGES.indexOf(b.stage));
+                if (sets.length === 0) return null;
+                return (
+                  <div key={slot} className="mt-6">
+                    <p className={`${TYPE.label} text-(--muted)`}>{slot}</p>
+                    <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {sets.map((s) => (
+                        <PerformerCard
+                          key={s.artist}
+                          set={s}
+                          added={plan.has(s.artist)}
+                          clashes={clashFor(s)}
+                          onToggle={() => toggle(s)}
+                          onDetails={(anchor) => setPicked({ set: s, anchor })}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </section>
+          );
+        })}
+      </div>
 
       <DetailPopover
         set={picked?.set ?? null}
         anchor={picked?.anchor ?? null}
         planned={picked ? plan.has(picked.set.artist) : false}
-        clashes={picked && alerts ? clashesWith(picked.set, planned) : []}
+        clashes={picked ? clashFor(picked.set) : []}
         onToggle={() => picked && toggle(picked.set)}
         onClose={() => setPicked(null)}
       />
@@ -756,10 +628,14 @@ export function Planner({ initialPlan = [], contained = false }: { initialPlan?:
       <PlanDrawer
         open={drawerOpen}
         onOpenChange={(next) => {
-          if (next) drawerSeen.current = true;
+          if (next) {
+            drawerSeen.current = true;
+            setDrawerDay(activeDay);
+          }
           setDrawerOpen(next);
         }}
-        day={day}
+        day={drawerDay}
+        onDay={setDrawerDay}
         planned={planned}
         alerts={alerts}
         onAlerts={setAlerts}

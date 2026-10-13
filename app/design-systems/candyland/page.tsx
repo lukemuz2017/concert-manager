@@ -119,7 +119,7 @@ const TYPE_ROLES = [
   {
     role: "Display",
     spec: "Fredoka · Bold 700 · 56 / 56, 40 on phones",
-    use: "Page titles, the festival name, and headliners on the poster.",
+    use: "Page titles, day headings, and headliner names on their cards.",
     sample: <p className={TYPE.display}>Sugar Rush</p>,
   },
   {

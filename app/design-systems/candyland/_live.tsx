@@ -17,8 +17,8 @@ export function LiveComponents() {
   return (
     <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
       <Panel
-        title="Planner: poster, popover, search & drawer"
-        note="Tap any name on the poster, or search. Brain Freeze is already in your plan, so adding Lolly & the Lickables (Thursday, 7:00) causes a Sugar Crash. The drawer opens on your first add and on any Sugar Crash; the Plan tab opens and closes it."
+        title="Planner: performer cards, filters, popover & plan drawer"
+        note="Shop the lineup like a store: scroll day by day, tap Add on a card, and your plan fills the drawer like a cart. Brain Freeze is already in, so adding Lolly & the Lickables (Thursday, 7:00) causes a Sugar Crash. The drawer opens on your first add and on any Sugar Crash; the My plan tab opens and closes it."
         className="lg:col-span-2"
       >
         <Planner contained initialPlan={["Brain Freeze"]} />
