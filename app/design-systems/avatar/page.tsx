@@ -14,6 +14,7 @@ import {
   CloseIcon,
   ElementScope,
   Emblem,
+  FlagButton,
   IconButton,
   NationMark,
   PassportStamp,
@@ -106,7 +107,7 @@ const TYPE_ROLES = [
     use: "Everything you read.",
     sample: (
       <p className={`max-w-prose ${TYPE.body}`}>
-        Bosco the Bear plays Ba Sing Se at 5:30, and Kuzon&apos;s Crew start at 7:00 across the grounds.
+        Bosco the Bear plays the Crystal Catacombs at 5:30, and Kuzon&apos;s Crew start at 7:00 across the grounds.
         Leave <b>eleven minutes early</b>, or miss the opening.
       </p>
     ),
@@ -168,6 +169,17 @@ const MATRIX: { name: string; cells: (ReactNode | null)[] }[] = [
     ],
   },
   {
+    name: "Interested flag",
+    cells: [
+      <FlagButton key="rest" flagged={false} />,
+      <FlagButton key="hover" flagged={false} force="hover" />,
+      <FlagButton key="focus" flagged={false} force="focus" />,
+      <FlagButton key="pressed" flagged={false} force="pressed" />,
+      <FlagButton key="selected" flagged />,
+      <FlagButton key="disabled" flagged={false} disabled />,
+    ],
+  },
+  {
     name: "Icon button",
     cells: [
       <IconButton key="rest" label="Close"><CloseIcon /></IconButton>,
@@ -181,12 +193,12 @@ const MATRIX: { name: string; cells: (ReactNode | null)[] }[] = [
   {
     name: "Stage chip",
     cells: [
-      <StageChip key="rest" name="Omashu" nation="earth" />,
-      <StageChip key="hover" name="Omashu" nation="earth" force="hover" />,
-      <StageChip key="focus" name="Omashu" nation="earth" force="focus" />,
-      <StageChip key="pressed" name="Omashu" nation="earth" force="pressed" />,
-      <StageChip key="selected" name="Omashu" nation="earth" selected />,
-      <StageChip key="disabled" name="Omashu" nation="earth" disabled />,
+      <StageChip key="rest" name="Wan Shi Tong's Library" nation="earth" />,
+      <StageChip key="hover" name="Wan Shi Tong's Library" nation="earth" force="hover" />,
+      <StageChip key="focus" name="Wan Shi Tong's Library" nation="earth" force="focus" />,
+      <StageChip key="pressed" name="Wan Shi Tong's Library" nation="earth" force="pressed" />,
+      <StageChip key="selected" name="Wan Shi Tong's Library" nation="earth" selected />,
+      <StageChip key="disabled" name="Wan Shi Tong's Library" nation="earth" disabled />,
     ],
   },
   {

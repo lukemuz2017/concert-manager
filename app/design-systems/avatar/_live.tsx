@@ -16,7 +16,11 @@ import {
   CloseIcon,
   DayTabs,
   Emblem,
+  FilterBar,
   FOCUS,
+  noFilters,
+  matchesFilters,
+  type Filters,
   IconButton,
   JourneyMap,
   JourneyPath,
@@ -27,7 +31,6 @@ import {
   ScrollPanel,
   Select,
   SetCard,
-  StageChip,
   TextField,
   TextLink,
   Toggle,
@@ -152,7 +155,8 @@ export function LiveComponents() {
   const [saved, setSaved] = useState(
     () => new Set(["Bosco the Bear", "Kuzon's Crew", "Dragon of the West", "Moon Spirit Choir", "Badgermoles"]),
   );
-  const [stages, setStages] = useState(() => new Set<string>());
+  const [filters, setFilters] = useState<Filters>(noFilters);
+  const [flagged, setFlagged] = useState(() => new Set(["Healing Hands", "Whale-Tooth Drums"]));
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("time");
   const [show, setShow] = useState("all");
@@ -163,14 +167,15 @@ export function LiveComponents() {
   const ids = useId();
 
   const toggle = (artist: string) => setSaved((prev) => toggled(prev, artist));
+  const flag = (artist: string) => setFlagged((prev) => toggled(prev, artist));
   const savedList = LINEUP.filter((s) => saved.has(s.artist));
   const clashing = (artist: string) => warn && saved.has(artist) && clashesWith(find(artist), savedList).length > 0;
 
   const rows = LINEUP.filter(
     (s) =>
       s.day === element &&
-      (stages.size === 0 || stages.has(s.stage.name)) &&
-      (show === "all" || saved.has(s.artist)) &&
+      matchesFilters(s, filters) &&
+      (show === "all" || (show === "saved" ? saved.has(s.artist) : flagged.has(s.artist))) &&
       !(hideClashes && !saved.has(s.artist) && clashesWith(s, savedList).length > 0) &&
       s.artist.toLowerCase().includes(query.trim().toLowerCase()),
   ).sort((a, b) => {
@@ -195,14 +200,17 @@ export function LiveComponents() {
     <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
       <Panel
         title="Lineup poster"
-        note="All 100 artists, a band per day. Each name wears its nation's emblem and underline. Hover a name, or click it, for the time, the stage, and the add button."
+        note="All 100 artists, a band per day. Each name wears its nation's emblem and underline. Filter by nation, stage, or genre and everyone else fades back. Hover a name, or click it, for the time, the stage, and the add button."
         className="lg:col-span-2"
       >
-        <LineupPoster saved={saved} onToggle={toggle} />
+        <div className="mb-6">
+          <FilterBar filters={filters} onChange={setFilters} />
+        </div>
+        <LineupPoster saved={saved} onToggle={toggle} flagged={flagged} onFlag={flag} filters={filters} />
       </Panel>
 
       <Panel
-        title="Lineup: day tabs, stage chips, rows & clash"
+        title="Lineup: day tabs, filters, rows & clash"
         note="The day tabs are today's element: pick one and the whole page follows. On Saturday, add Healing Hands to collide with Kuzon's Crew at 7:00."
         className="lg:col-span-2"
       >
@@ -219,6 +227,7 @@ export function LiveComponents() {
               <div className="mt-3 flex flex-col gap-2.5">
                 <Radio name={`${ids}-show`} value="all" checked={show === "all"} onChange={() => setShow("all")} label="The whole lineup" />
                 <Radio name={`${ids}-show`} value="saved" checked={show === "saved"} onChange={() => setShow("saved")} label="Only my journey" />
+                <Radio name={`${ids}-show`} value="flagged" checked={show === "flagged"} onChange={() => setShow("flagged")} label="Only flagged" />
               </div>
             </fieldset>
             <Checkbox label="Hide sets that would clash" checked={hideClashes} onChange={(e) => setHideClashes(e.target.checked)} />
@@ -226,16 +235,8 @@ export function LiveComponents() {
           </div>
 
           <div className="min-w-0">
-            <div className="mb-6 flex flex-wrap gap-2">
-              {STAGES.map((s) => (
-                <StageChip
-                  key={s.name}
-                  name={s.name}
-                  nation={s.nation}
-                  selected={stages.has(s.name)}
-                  onToggle={() => setStages((prev) => toggled(prev, s.name))}
-                />
-              ))}
+            <div className="mb-6">
+              <FilterBar filters={filters} onChange={setFilters} />
             </div>
             <DayTabs>
               <div aria-live="polite">
@@ -251,6 +252,7 @@ export function LiveComponents() {
                         key={s.artist}
                         set={s}
                         saved={saved.has(s.artist)}
+                        flagged={flagged.has(s.artist)}
                         clash={clashing(s.artist)}
                         onToggle={() => toggle(s.artist)}
                         onDetails={() => setDetail(s.artist)}
@@ -270,7 +272,7 @@ export function LiveComponents() {
 
       <Panel
         title="Journey: path, map & next up"
-        note="Your day as a route. Saturday shows a tight walk: Bosco the Bear plays Ba Sing Se at 5:30, and Kuzon's Crew start at 7:00 on another stage. The clock is set to 6:40 PM."
+        note="Your day as a route. Saturday shows a tight walk: Bosco the Bear plays the Crystal Catacombs at 5:30, and Kuzon's Crew start at 7:00 on another stage. The clock is set to 6:40 PM."
         className="lg:col-span-2"
       >
         <div className="grid items-start gap-8 lg:grid-cols-[1fr_1.3fr]">

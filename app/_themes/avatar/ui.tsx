@@ -18,7 +18,9 @@ import {
 
 import {
   GATE,
+  GENRES,
   legBetween,
+  LINEUP,
   SLOTS,
   slotMinutes,
   STAGE_POS,
@@ -197,6 +199,22 @@ export function StageLine({ stage }: { stage: string }) {
   );
 }
 
+// A pennant on a pole. Filled when flagged.
+export function FlagIcon({ filled = false, className = "h-4 w-4" }: { filled?: boolean; className?: string }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" className={`shrink-0 ${className}`}>
+      <path d="M3.5 14V2.2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path
+        d="M3.8 2.8c2.4-1.2 4.2 1.2 6.4 0 .9-.5 1.8-.6 2.5-.3v5.8c-.8-.3-1.6-.2-2.5.3-2.200 1.200-4-1.200-6.400 0Z"
+        fill={filled ? "currentColor" : "none"}
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function CheckIcon({ className = "h-4 w-4" }: { className?: string }) {
   return (
     <svg aria-hidden="true" viewBox="0 0 16 16" className={`shrink-0 ${className}`}>
@@ -298,6 +316,36 @@ export function AddButton({
     >
       {added ? <CheckIcon /> : <PlusIcon />}
       {added ? addedLabel : label}
+    </button>
+  );
+}
+
+// "Interested": a light, non-committal mark that sits beside the primary Add. It never causes
+// a clash. A flagged set shows a filled flag; the day's wash tints the button.
+export function FlagButton({
+  flagged,
+  onToggle,
+  artist,
+  force,
+  disabled,
+}: {
+  flagged: boolean;
+  onToggle?: () => void;
+  artist?: string;
+  force?: Force;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={flagged}
+      disabled={disabled}
+      aria-label={artist ? `${flagged ? "Remove interest in" : "Interested in"}: ${artist}` : undefined}
+      onClick={onToggle}
+      className={`${BUTTON_BASE} ${flagged ? "border-(--ink) bg-(--el-wash) text-(--ink)" : "border-(--ink) bg-(--paper) text-(--ink) enabled:hover:bg-(--el-wash)"} ${pin({ hover: "bg-(--el-wash)!", pressed: "bg-(--el-wash)!" }, force, true)}`}
+    >
+      <FlagIcon filled={flagged} />
+      {flagged ? "Interested" : "Interested?"}
     </button>
   );
 }
@@ -651,12 +699,14 @@ export function SetCard({
 export function LineupRow({
   set,
   saved,
+  flagged,
   clash,
   onToggle,
   onDetails,
 }: {
   set: FestivalSet;
   saved: boolean;
+  flagged?: boolean;
   clash?: boolean;
   onToggle?: () => void;
   onDetails?: () => void;
@@ -677,6 +727,12 @@ export function LineupRow({
             style={{ textDecorationColor: ELEMENTS[set.nation].line }}
           >
             {set.artist}
+            {flagged && !saved && (
+              <>
+                <FlagIcon filled className="ml-1.5 inline h-3.5 w-3.5" />
+                <span className="sr-only"> (interested)</span>
+              </>
+            )}
           </button>
           <span className="text-sm text-(--ink-muted)">{set.stage.name}</span>
         </span>
@@ -1058,6 +1114,212 @@ export function NextUp({
           <b className="text-(--ink)">{leaveIn > 0 ? `leave by ${clock(start - walk)}` : "go now"}</b>.
         </p>
       </div>
+    </div>
+  );
+}
+
+/* Filters: nation, stage, and genre in one compact bar ----------------------- */
+
+export type Filters = { nations: Set<ElementKey>; stages: Set<string>; genres: Set<string> };
+export const noFilters = (): Filters => ({ nations: new Set(), stages: new Set(), genres: new Set() });
+export const filtersActive = (f: Filters) => f.nations.size + f.stages.size + f.genres.size > 0;
+
+// Within one filter any option may match; across filters every filter must match.
+export function matchesFilters(s: FestivalSet, f: Filters) {
+  return (
+    (f.nations.size === 0 || f.nations.has(s.nation)) &&
+    (f.stages.size === 0 || f.stages.has(s.stage.name)) &&
+    (f.genres.size === 0 || f.genres.has(s.genre))
+  );
+}
+
+function toggleIn<T>(set: Set<T>, value: T) {
+  const next = new Set(set);
+  if (next.has(value)) next.delete(value);
+  else next.add(value);
+  return next;
+}
+
+// One dropdown. It closes on Escape, or when focus or a click leaves it.
+function FilterMenu({ label, active, children }: { label: string; active: number; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  const trigger = useRef<HTMLButtonElement>(null);
+  const wrap = useRef<HTMLDivElement>(null);
+
+  // A click anywhere outside closes the menu, even in browsers that don't focus buttons on click.
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => {
+      if (!wrap.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", away);
+    return () => document.removeEventListener("pointerdown", away);
+  }, [open]);
+
+  return (
+    <div
+      ref={wrap}
+      className="relative"
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape" && open) {
+          setOpen(false);
+          trigger.current?.focus();
+        }
+      }}
+    >
+      <button
+        ref={trigger}
+        type="button"
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen(!open)}
+        className={`inline-flex cursor-pointer items-center gap-2 border-[1.5px] py-2 pr-3 pl-4 font-medium transition-colors duration-(--el-dur) ${SHAPE.button} ${FOCUS} ${active > 0 ? "border-(--ink) bg-(--el-wash)" : "border-(--line) bg-(--paper) hover:border-(--ink)"}`}
+      >
+        {label}
+        {active > 0 && <Badge tone="count" count={active} />}
+        <svg aria-hidden="true" viewBox="0 0 16 16" className={`h-3.5 w-3.5 transition-transform duration-150 ${open ? "rotate-180" : ""}`}>
+          <path d="M3.5 6.2c1.6 1.4 3 2.9 4.5 4.3 1.5-1.5 3-3 4.5-4.4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          id={id}
+          className={`fixed inset-x-3 top-1/4 z-30 max-h-[60vh] overflow-y-auto border-[1.5px] border-(--ink) bg-(--paper) p-4 sm:absolute sm:inset-x-auto sm:top-full sm:left-0 sm:mt-2 sm:max-h-80 sm:w-72 ${SHAPE.card}`}
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Option({
+  checked,
+  onChange,
+  icon,
+  name,
+  count,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  icon?: ReactNode;
+  name: string;
+  count: number;
+}) {
+  return (
+    <li>
+      <Checkbox
+        checked={checked}
+        onChange={onChange}
+        label={
+          <span className="flex items-center gap-2">
+            {icon}
+            {name}
+            <span className="text-sm text-(--ink-muted) tabular-nums">{count}</span>
+          </span>
+        }
+      />
+    </li>
+  );
+}
+
+export function FilterBar({ filters, onChange }: { filters: Filters; onChange: (next: Filters) => void }) {
+  const total = LINEUP.length;
+  const shown = LINEUP.filter((s) => matchesFilters(s, filters)).length;
+  const countBy = (pick: (s: FestivalSet) => string, value: string) => LINEUP.filter((s) => pick(s) === value).length;
+
+  const chips: { key: string; label: string; remove: () => void }[] = [
+    ...[...filters.nations].map((n) => ({
+      key: `n-${n}`,
+      label: ELEMENTS[n].nation,
+      remove: () => onChange({ ...filters, nations: toggleIn(filters.nations, n) }),
+    })),
+    ...[...filters.stages].map((st) => ({
+      key: `s-${st}`,
+      label: st,
+      remove: () => onChange({ ...filters, stages: toggleIn(filters.stages, st) }),
+    })),
+    ...[...filters.genres].map((g) => ({
+      key: `g-${g}`,
+      label: g,
+      remove: () => onChange({ ...filters, genres: toggleIn(filters.genres, g) }),
+    })),
+  ];
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-3">
+        <FilterMenu label="Nation" active={filters.nations.size}>
+          <ul className="space-y-2.5">
+            {ELEMENT_ORDER.map((n) => (
+              <Option
+                key={n}
+                checked={filters.nations.has(n)}
+                onChange={() => onChange({ ...filters, nations: toggleIn(filters.nations, n) })}
+                icon={<NationMark nation={n} />}
+                name={ELEMENTS[n].nation}
+                count={countBy((s) => s.nation, n)}
+              />
+            ))}
+          </ul>
+        </FilterMenu>
+        <FilterMenu label="Stage" active={filters.stages.size}>
+          <ul className="space-y-2.5">
+            {STAGES.map((st) => (
+              <Option
+                key={st.name}
+                checked={filters.stages.has(st.name)}
+                onChange={() => onChange({ ...filters, stages: toggleIn(filters.stages, st.name) })}
+                icon={<NationMark nation={st.nation} />}
+                name={st.name}
+                count={countBy((s) => s.stage.name, st.name)}
+              />
+            ))}
+          </ul>
+        </FilterMenu>
+        <FilterMenu label="Genre" active={filters.genres.size}>
+          <ul className="space-y-2.5">
+            {GENRES.map((g) => (
+              <Option
+                key={g}
+                checked={filters.genres.has(g)}
+                onChange={() => onChange({ ...filters, genres: toggleIn(filters.genres, g) })}
+                name={g}
+                count={countBy((s) => s.genre, g)}
+              />
+            ))}
+          </ul>
+        </FilterMenu>
+        <p className="text-sm text-(--ink-muted)" aria-live="polite">
+          {filtersActive(filters) ? `${shown} of ${total} artists` : `${total} artists`}
+        </p>
+      </div>
+      {chips.length > 0 && (
+        <ul className="mt-3 flex flex-wrap items-center gap-2" aria-label="Active filters">
+          {chips.map((c) => (
+            <li key={c.key}>
+              <button
+                type="button"
+                onClick={c.remove}
+                aria-label={`Remove filter: ${c.label}`}
+                className={`inline-flex cursor-pointer items-center gap-1.5 border-[1.5px] border-(--ink) bg-(--ink) py-1 pr-2 pl-3 text-sm font-medium text-(--paper) ${SHAPE.button} ${FOCUS}`}
+              >
+                {c.label}
+                <CloseIcon className="h-3.5 w-3.5" />
+              </button>
+            </li>
+          ))}
+          <li>
+            <button type="button" onClick={() => onChange(noFilters())} className={`cursor-pointer text-sm ${LINK}`}>
+              Clear all
+            </button>
+          </li>
+        </ul>
+      )}
     </div>
   );
 }

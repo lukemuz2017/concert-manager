@@ -4,7 +4,22 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { clashesWith, DAY_ORDER, isHeadliner, LINEUP, SLOTS, type FestivalSet } from "./lineup";
 import { ELEMENTS, SHAPE, TYPE } from "./tokens";
-import { AddButton, CheckIcon, CloseIcon, Emblem, FOCUS, IconButton, NationMark, Seal, StageLine } from "./ui";
+import {
+  AddButton,
+  CheckIcon,
+  CloseIcon,
+  Emblem,
+  FlagButton,
+  FlagIcon,
+  FOCUS,
+  IconButton,
+  matchesFilters,
+  NationMark,
+  Seal,
+  StageLine,
+  filtersActive,
+  type Filters,
+} from "./ui";
 
 // The lineup as a festival poster, a day per band: the day tag and headliners
 // large on the left, everyone else flowing on the right. Every name carries its
@@ -18,8 +33,10 @@ function PosterName({
   set,
   size,
   inPlan,
+  flagged,
   clash,
   active,
+  dim,
   onHover,
   onLeave,
   onPick,
@@ -27,8 +44,10 @@ function PosterName({
   set: FestivalSet;
   size: "headliner" | "major" | "minor";
   inPlan: boolean;
+  flagged: boolean;
   clash: boolean;
   active: boolean;
+  dim: boolean;
   onHover: (anchor: HTMLElement) => void;
   onLeave: () => void;
   onPick: (anchor: HTMLElement) => void;
@@ -49,15 +68,17 @@ function PosterName({
       onMouseEnter={(e) => onHover(e.currentTarget)}
       onMouseLeave={onLeave}
       onClick={(e) => onPick(e.currentTarget)}
-      className={`inline-flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-0.5 text-left underline decoration-[3px] underline-offset-[6px] transition-colors duration-(--el-dur) hover:bg-(--paper) hover:decoration-wavy ${FOCUS} ${active ? "bg-(--paper) decoration-wavy" : ""} ${type}`}
+      className={`inline-flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-0.5 text-left underline decoration-[3px] underline-offset-[6px] transition-[background-color,opacity] duration-(--el-dur) hover:bg-(--paper) hover:decoration-wavy hover:opacity-100 ${FOCUS} ${dim ? "opacity-25" : ""} ${active ? "bg-(--paper) decoration-wavy" : ""} ${type}`}
       style={{ textDecorationColor: el.line }}
     >
       <span style={{ color: el.line }} className="self-start pt-[0.2em]">
         <Emblem element={set.nation} className={emblem} />
       </span>
       {set.artist}
-      {clash ? <Seal className="h-5 w-5 text-xs" /> : inPlan && <CheckIcon className="h-4 w-4" />}
-      {(inPlan || clash) && <span className="sr-only">{clash ? " (clash)" : " (on your journey)"}</span>}
+      {clash ? <Seal className="h-5 w-5 text-xs" /> : inPlan ? <CheckIcon className="h-4 w-4" /> : flagged && <FlagIcon filled className="h-3.5 w-3.5" />}
+      {(inPlan || clash || flagged) && (
+        <span className="sr-only">{clash ? " (clash)" : inPlan ? " (on your journey)" : " (interested)"}</span>
+      )}
     </button>
   );
 }
@@ -67,16 +88,20 @@ function PosterName({
 function NamePopover({
   picked,
   saved,
+  flagged,
   clashes,
   onToggle,
+  onFlag,
   onClose,
   onKeepOpen,
   onLeave,
 }: {
   picked: Picked | null;
   saved: boolean;
+  flagged: boolean;
   clashes: FestivalSet[];
   onToggle: () => void;
+  onFlag: () => void;
   onClose: () => void;
   onKeepOpen: () => void;
   onLeave: () => void;
@@ -170,8 +195,10 @@ function NamePopover({
               </span>
             </p>
           )}
-          <div className="mt-4">
+          <div className="mt-4 flex flex-wrap items-center gap-3">
             <AddButton added={saved} onToggle={onToggle} />
+            {/* Interested is lighter than a plan: it marks a set without committing the hour. */}
+            <FlagButton flagged={flagged} onToggle={onFlag} artist={set.artist} />
           </div>
         </div>
       )}
@@ -182,9 +209,15 @@ function NamePopover({
 export function LineupPoster({
   saved,
   onToggle,
+  flagged,
+  onFlag,
+  filters,
 }: {
   saved: Set<string>;
   onToggle: (artist: string) => void;
+  flagged?: Set<string>;
+  onFlag?: (artist: string) => void;
+  filters?: Filters;
 }) {
   const [picked, setPicked] = useState<Picked | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -211,8 +244,10 @@ export function LineupPoster({
       set={set}
       size={size}
       inPlan={saved.has(set.artist)}
+      flagged={!!flagged?.has(set.artist)}
       clash={saved.has(set.artist) && clashesWith(set, savedList).length > 0}
       active={picked?.set === set}
+      dim={!!filters && filtersActive(filters) && !matchesFilters(set, filters)}
       onHover={(anchor) => hover(set, anchor)}
       onLeave={scheduleClose}
       onPick={(anchor) => {
@@ -281,8 +316,10 @@ export function LineupPoster({
       <NamePopover
         picked={picked}
         saved={picked ? saved.has(picked.set.artist) : false}
+        flagged={picked ? !!flagged?.has(picked.set.artist) : false}
         clashes={picked ? clashesWith(picked.set, savedList) : []}
         onToggle={() => picked && onToggle(picked.set.artist)}
+        onFlag={() => picked && onFlag?.(picked.set.artist)}
         onClose={() => setPicked(null)}
         onKeepOpen={cancelClose}
         onLeave={scheduleClose}

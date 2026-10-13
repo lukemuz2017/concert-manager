@@ -5,10 +5,10 @@ import type { ElementKey } from "./tokens";
 // belongs to a nation (their emblem and underline).
 
 export const STAGES = [
-  { name: "Northern Water Tribe", nation: "water" },
-  { name: "Ba Sing Se", nation: "earth" },
-  { name: "Omashu", nation: "earth" },
-  { name: "Fire Nation Capital", nation: "fire" },
+  { name: "Spirit Oasis", nation: "water" },
+  { name: "Crystal Catacombs", nation: "earth" },
+  { name: "Wan Shi Tong's Library", nation: "earth" },
+  { name: "Royal Caldera", nation: "fire" },
   { name: "Ember Island", nation: "fire" },
   { name: "Western Air Temple", nation: "air" },
 ] as const satisfies readonly { name: string; nation: ElementKey }[];
@@ -19,10 +19,27 @@ export type Slot = (typeof SLOTS)[number];
 
 export const DAY_ORDER: ElementKey[] = ["water", "earth", "fire", "air"];
 
+// Four genre families keep the filter compact; each artist still has a specific sound.
+export const GENRES = ["Folk & Ambient", "Rock & Drums", "Jazz & Orchestra", "Pop & Dance"] as const;
+export type Genre = (typeof GENRES)[number];
+
+// Six of the 24 sounds in each family, so each filter option holds about a quarter of the lineup.
+const FAMILY: Record<string, Genre> = {
+  "Tidal folk": "Folk & Ambient", "Sea shanties": "Folk & Ambient", "Mountain folk": "Folk & Ambient",
+  "Sky folk": "Folk & Ambient", "Chant and drone": "Folk & Ambient", "Ice-cave ambient": "Folk & Ambient",
+  "Whale-bone percussion": "Rock & Drums", "Stone-and-gong rock": "Rock & Drums", "Earth Rumble metal": "Rock & Drums",
+  "Comet punk": "Rock & Drums", "Temple bells": "Rock & Drums", "Volcanic drum and bass": "Rock & Drums",
+  "Tea-house jazz": "Jazz & Orchestra", "Desert blues": "Jazz & Orchestra", "Brass band": "Jazz & Orchestra",
+  "Court orchestra": "Jazz & Orchestra", "Lantern-lit jazz": "Jazz & Orchestra", "Moonlit choral": "Jazz & Orchestra",
+  "Glacial dream-pop": "Pop & Dance", "Sun Warrior dance": "Pop & Dance", "Theater pop": "Pop & Dance",
+  "Glider pop": "Pop & Dance", "Lemur funk": "Pop & Dance", "Wind-chime ambient": "Pop & Dance",
+};
+
 export type FestivalSet = {
   artist: string;
   nation: ElementKey;
-  blurb: string;
+  blurb: string; // the specific sound
+  genre: Genre; // its family, for filtering
   day: ElementKey;
   time: Slot;
   stage: Stage;
@@ -82,7 +99,7 @@ const ARTISTS: Record<ElementKey, string[]> = {
   ],
 };
 
-const GENRES: Record<ElementKey, string[]> = {
+const SOUNDS: Record<ElementKey, string[]> = {
   water: ["Tidal folk", "Ice-cave ambient", "Whale-bone percussion", "Moonlit choral", "Sea shanties", "Glacial dream-pop"],
   earth: ["Stone-and-gong rock", "Earth Rumble metal", "Tea-house jazz", "Desert blues", "Brass band", "Mountain folk"],
   fire: ["Sun Warrior dance", "Volcanic drum and bass", "Court orchestra", "Theater pop", "Lantern-lit jazz", "Comet punk"],
@@ -108,6 +125,7 @@ const BILL: Slot[] = [
 ];
 
 function buildLineup(): FestivalSet[] {
+  const stageLoad = new Map<string, number>();
   const taken: Record<ElementKey, number> = { water: 0, earth: 0, fire: 0, air: 0 };
   const sets: FestivalSet[] = [];
 
@@ -125,16 +143,22 @@ function buildLineup(): FestivalSet[] {
       if (next) dealt.push(next);
     }
 
-    // Stages: prefer one that belongs to the artist's nation, else the next free one.
-    const used: Partial<Record<Slot, Set<string>>> = {};
+    // Stages: no two artists share a stage in a slot. Home stages are preferred, but a
+    // stage that is already busy loses to a quieter one, so every stage ends up with about
+    // the same number of sets (the Stage filter depends on that).
+    const taken_: Partial<Record<Slot, Set<string>>> = {};
     dealt.forEach(([artist, nation], i) => {
       const time = BILL[i];
-      const free = (used[time] ??= new Set());
-      const home = STAGES.find((s) => s.nation === nation && !free.has(s.name));
-      const stage = home ?? STAGES[[...Array(6).keys()].map((k) => (i + k) % 6).find((k) => !free.has(STAGES[k].name))!];
-      free.add(stage.name);
-      const genres = GENRES[nation];
-      sets.push({ artist, nation, blurb: genres[(i + DAY_ORDER.indexOf(day)) % genres.length], day, time, stage });
+      const inSlot = (taken_[time] ??= new Set());
+      const stage = STAGES.filter((s) => !inSlot.has(s.name)).reduce((best, s) => {
+        const score = (st: Stage) => (stageLoad.get(st.name) ?? 0) - (st.nation === nation ? 3 : 0);
+        return score(s) < score(best) ? s : best;
+      });
+      inSlot.add(stage.name);
+      stageLoad.set(stage.name, (stageLoad.get(stage.name) ?? 0) + 1);
+      const sounds = SOUNDS[nation];
+      const blurb = sounds[(i + DAY_ORDER.indexOf(day)) % sounds.length];
+      sets.push({ artist, nation, blurb, genre: FAMILY[blurb], day, time, stage });
     });
   }
   return sets;
@@ -158,10 +182,10 @@ export function clashesWith(set: FestivalSet, saved: FestivalSet[]) {
 export const GATE = { x: 50, y: 62 };
 export const STAGE_POS: Record<Stage["name"], { x: number; y: number }> = {
   "Western Air Temple": { x: 14, y: 12 },
-  "Northern Water Tribe": { x: 84, y: 10 },
-  Omashu: { x: 20, y: 40 },
-  "Ba Sing Se": { x: 50, y: 28 },
-  "Fire Nation Capital": { x: 82, y: 44 },
+  "Spirit Oasis": { x: 84, y: 10 },
+  "Wan Shi Tong's Library": { x: 20, y: 40 },
+  "Crystal Catacombs": { x: 50, y: 28 },
+  "Royal Caldera": { x: 82, y: 44 },
   "Ember Island": { x: 67, y: 52 },
 };
 
