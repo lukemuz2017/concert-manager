@@ -10,6 +10,25 @@ Coursework for **Design, Build, Ship · MPCS 51238 · Autumn 2026**, Assignment 
 One static Next.js + Tailwind project on Vercel. The homepage (`/`) is a hub linking to
 three mood boards, three design systems, and the site.
 
+## Purpose, and why three themes first
+
+The assignment is about **design process**, not just a finished page. The product is a
+festival concert planner, but the real exercise is learning to choose a visual direction on
+purpose:
+
+1. **Mood boards** explore three genuinely different worlds (so far: a candy board game, an
+   18th-century classical festival, and the four nations of an animated fantasy world),
+   using imagery, color, and texture to set a feeling.
+2. **Design systems** turn each mood into a working UI kit: color roles, type, shape,
+   components, control states, and UI states. Each theme also tries its own *interaction
+   ideas* for the same planner job (a storefront of cards, a timetable score with page turns,
+   a poster with element-driven motion), so the choice is about experience, not just styling.
+3. **The site** is built in the one theme chosen after comparing them, using that theme's
+   components, so the system and the product cannot drift apart.
+
+Iterating first makes the final choice deliberate and defensible: the student can say what
+was tried, what was kept, and why. Each theme stands alone; none refers to the others.
+
 ## How to work here
 
 The brief marks one-shot agent output as incomplete, and the student must defend their
@@ -25,9 +44,8 @@ design choices in class. So:
 A **concert planner for festival attendees**: you add the artists you want to see, and it
 flags when you have double-booked yourself.
 
-- 4 days (Thu–Sun) × 6 stages × 6 slots a day (1:00, 2:30, 4:00, 5:30, 7:00, 8:30 PM;
-  1.5-hour sets, no gaps) = 144 slots. 100 artists, one set each, so 44 slots stay empty.
-- Every set sits on the same grid, so a conflict is an exact day+slot match.
+- Four days (Thu–Sun), six stages, six 1.5-hour slots a day, and 100 artists with one set
+  each. Every set sits on the same grid, so a conflict is an exact day+slot match.
 - **Nothing is saved.** No database, accounts, external APIs, or `localStorage`. React state
   only; it resets on reload.
 
