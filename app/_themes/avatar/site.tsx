@@ -299,7 +299,7 @@ function Shell({ children }: { children: ReactNode }) {
           <div
             key={clashFlag.id}
             role="status"
-            className={`pointer-events-auto flex max-w-md items-center gap-3 border-[1.5px] border-(--ink) bg-(--paper) py-3 pr-3 pl-4 shadow-[0_6px_0_rgba(0,0,0,0.12)] transition-opacity duration-500 motion-safe:animate-stamp ${SHAPE.card} ${flagShown ? "opacity-100" : "opacity-0"}`}
+            className={`pointer-events-auto flex w-full max-w-md min-w-0 items-center gap-3 border-[1.5px] border-(--ink) bg-(--paper) py-3 pr-3 pl-4 shadow-[0_6px_0_rgba(0,0,0,0.12)] transition-opacity duration-500 motion-safe:animate-stamp ${SHAPE.card} ${flagShown ? "opacity-100" : "opacity-0"}`}
           >
             <Seal className="h-9 w-9 text-xl" />
             <p className="min-w-0 flex-1 text-sm">
@@ -424,14 +424,18 @@ export function LineupPage() {
 
   return (
     <>
-      {/* The festival painting stays put behind the page; the lineup sheet slides up over it. */}
-      <div aria-hidden="true" className="pointer-events-none fixed inset-x-0 top-[7.2rem] -z-10 lg:top-[4.25rem]">
-        <Image src={festivalPoster} alt="" priority sizes="100vw" className="h-auto w-full" />
-      </div>
-
       <main>
-        <div className="h-[30vw] lg:h-[17vw]" />
-        <div className="border-t-[1.5px] border-(--ink) bg-(--parchment)">
+        {/* The whole festival painting across the top, held a little smaller than the page. */}
+        <div className="mx-auto max-w-6xl px-4 pt-6 sm:px-8">
+          <Image
+            src={festivalPoster}
+            alt="The Four Nations Music Festival. Four elements, one stage. A young monk sits on a rock at sunset, looking down on a glowing festival stage and crowds in a valley below a cliffside city."
+            priority
+            sizes="(min-width: 960px) 896px, 100vw"
+            className={`mx-auto h-auto w-full max-w-4xl border-[1.5px] border-(--ink) ${SHAPE.card}`}
+          />
+        </div>
+        <div>
           <div className="mx-auto max-w-6xl px-4 pt-6 pb-16 sm:px-8">
             <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
               <h1 className={TYPE.display}>Plan your four days</h1>
@@ -449,42 +453,45 @@ export function LineupPage() {
             </p>
 
             <section id="lineup" aria-labelledby="lineup-title" className="mt-6 sm:mt-8">
-              <h2 id="lineup-title" className={TYPE.heading}>
-                The lineup
-              </h2>
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <div className="relative min-w-0 grow basis-60 sm:max-w-md">
-                  <SearchIcon className="pointer-events-none absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-(--ink-muted)" />
-                  <TextField
-                    label="Search artists"
-                    hideLabel
-                    type="search"
-                    placeholder="Search artists"
-                    value={p.query}
-                    onChange={(e) => p.setQuery(e.target.value)}
-                    style={{ paddingLeft: "2.75rem" }}
-                  />
+              {/* The heading, search, and filters stay pinned under the header while the lineup scrolls. */}
+              <div className="sticky top-[115px] z-20 -mx-4 bg-(--parchment) px-4 pt-2 pb-3 sm:-mx-8 sm:px-8 lg:top-[68px]">
+                <h2 id="lineup-title" className={TYPE.heading}>
+                  The lineup
+                </h2>
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <div className="relative min-w-0 grow basis-60 sm:max-w-md">
+                    <SearchIcon className="pointer-events-none absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-(--ink-muted)" />
+                    <TextField
+                      label="Search artists"
+                      hideLabel
+                      type="search"
+                      placeholder="Search artists"
+                      value={p.query}
+                      onChange={(e) => p.setQuery(e.target.value)}
+                      style={{ paddingLeft: "2.75rem" }}
+                    />
+                  </div>
+                  <Button
+                    variant="secondary"
+                    aria-haspopup="dialog"
+                    aria-label={chips.length > 0 ? `Filters, ${chips.length} active` : undefined}
+                    onClick={() => setFiltering(true)}
+                  >
+                    <FilterIcon className="h-5 w-5" />
+                    Filters
+                    {chips.length > 0 && <Badge tone="count" count={chips.length} />}
+                  </Button>
+                  <p className="text-sm text-(--ink-muted)" aria-live="polite">
+                    {!narrowed ? `${LINEUP.length} artists` : shownCount === 0 ? "No artists match" : `${shownCount} of ${LINEUP.length} artists`}
+                  </p>
                 </div>
-                <Button
-                  variant="secondary"
-                  aria-haspopup="dialog"
-                  aria-label={chips.length > 0 ? `Filters, ${chips.length} active` : undefined}
-                  onClick={() => setFiltering(true)}
-                >
-                  <FilterIcon className="h-5 w-5" />
-                  Filters
-                  {chips.length > 0 && <Badge tone="count" count={chips.length} />}
-                </Button>
-                <p className="text-sm text-(--ink-muted)" aria-live="polite">
-                  {!narrowed ? `${LINEUP.length} artists` : shownCount === 0 ? "No artists match" : `${shownCount} of ${LINEUP.length} artists`}
-                </p>
+                {chips.length > 0 && (
+                  <div className="mt-3">
+                    <FilterChips chips={chips} onClear={clearFilters} />
+                  </div>
+                )}
               </div>
-              {chips.length > 0 && (
-                <div className="mt-3">
-                  <FilterChips chips={chips} onClear={clearFilters} />
-                </div>
-              )}
-              <div className="mt-5">
+              <div className="mt-2">
                 <LineupPoster
                   boxed
                   boxRef={box}
@@ -669,33 +676,36 @@ function JourneyDrawer({
               </button>
             ))}
           </div>
+          {/* The days stay pinned in the header while the journey scrolls beneath them. */}
+          {tab === "journey" && (
+              <div role="group" aria-label="Day" className="mt-3 flex gap-1.5">
+                {ELEMENT_ORDER.map((key) => {
+                  const count = savedList.filter((s) => s.day === key).length;
+                  const e = ELEMENTS[key];
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      aria-pressed={key === element}
+                      onClick={() => setElement(key)}
+                      className={`inline-flex flex-1 cursor-pointer items-center justify-center gap-1 border-[1.5px] border-(--ink) px-1.5 py-1.5 text-sm font-medium ${SHAPE.button} ${FOCUS}`}
+                      style={key === element ? { background: e.fill, color: e.on } : { background: "var(--paper)" }}
+                    >
+                      <Emblem element={key} className="h-4 w-4" />
+                      {e.day}
+                      {count > 0 && <span className="tabular-nums">{count}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+          )}
         </header>
 
         <div id={`${id}-panel`} role="tabpanel" aria-labelledby={`${id}-${tab}`} className="flex-1 overflow-y-auto px-5 py-5">
           {tab === "journey" ? (
             <div className="space-y-8">
               <section aria-label={`${el.dayName} journey`}>
-                <div role="group" aria-label="Day" className="flex gap-1.5">
-                  {ELEMENT_ORDER.map((key) => {
-                    const count = savedList.filter((s) => s.day === key).length;
-                    const e = ELEMENTS[key];
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        aria-pressed={key === element}
-                        onClick={() => setElement(key)}
-                        className={`inline-flex flex-1 cursor-pointer items-center justify-center gap-1 border-[1.5px] border-(--ink) px-1.5 py-1.5 text-sm font-medium ${SHAPE.button} ${FOCUS}`}
-                        style={key === element ? { background: e.fill, color: e.on } : { background: "var(--paper)" }}
-                      >
-                        <Emblem element={key} className="h-4 w-4" />
-                        {e.day}
-                        {count > 0 && <span className="tabular-nums">{count}</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-                <h3 className={`mt-5 ${TYPE.heading}`}>{el.dayName}</h3>
+                <h3 className={TYPE.heading}>{el.dayName}</h3>
 
                 {firstClash.length > 1 && (
                   <div className="mt-4">
