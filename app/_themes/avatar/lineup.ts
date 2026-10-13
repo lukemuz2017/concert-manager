@@ -20,19 +20,19 @@ export type Slot = (typeof SLOTS)[number];
 export const DAY_ORDER: ElementKey[] = ["water", "earth", "fire", "air"];
 
 // Four genre families keep the filter compact; each artist still has a specific sound.
-export const GENRES = ["Folk & Ambient", "Rock & Drums", "Jazz & Orchestra", "Pop & Dance"] as const;
+export const GENRES = ["Spirit Songs", "Earthshakers", "Tea House Classics", "Firelight Dance"] as const;
 export type Genre = (typeof GENRES)[number];
 
 // Six of the 24 sounds in each family, so each filter option holds about a quarter of the lineup.
 const FAMILY: Record<string, Genre> = {
-  "Tidal folk": "Folk & Ambient", "Sea shanties": "Folk & Ambient", "Mountain folk": "Folk & Ambient",
-  "Sky folk": "Folk & Ambient", "Chant and drone": "Folk & Ambient", "Ice-cave ambient": "Folk & Ambient",
-  "Whale-bone percussion": "Rock & Drums", "Stone-and-gong rock": "Rock & Drums", "Earth Rumble metal": "Rock & Drums",
-  "Comet punk": "Rock & Drums", "Temple bells": "Rock & Drums", "Volcanic drum and bass": "Rock & Drums",
-  "Tea-house jazz": "Jazz & Orchestra", "Desert blues": "Jazz & Orchestra", "Brass band": "Jazz & Orchestra",
-  "Court orchestra": "Jazz & Orchestra", "Lantern-lit jazz": "Jazz & Orchestra", "Moonlit choral": "Jazz & Orchestra",
-  "Glacial dream-pop": "Pop & Dance", "Sun Warrior dance": "Pop & Dance", "Theater pop": "Pop & Dance",
-  "Glider pop": "Pop & Dance", "Lemur funk": "Pop & Dance", "Wind-chime ambient": "Pop & Dance",
+  "Tidal folk": "Spirit Songs", "Sea shanties": "Spirit Songs", "Mountain folk": "Spirit Songs",
+  "Sky folk": "Spirit Songs", "Chant and drone": "Spirit Songs", "Ice-cave ambient": "Spirit Songs",
+  "Whale-bone percussion": "Earthshakers", "Stone-and-gong rock": "Earthshakers", "Earth Rumble metal": "Earthshakers",
+  "Comet punk": "Earthshakers", "Temple bells": "Earthshakers", "Volcanic drum and bass": "Earthshakers",
+  "Tea-house jazz": "Tea House Classics", "Desert blues": "Tea House Classics", "Brass band": "Tea House Classics",
+  "Court orchestra": "Tea House Classics", "Lantern-lit jazz": "Tea House Classics", "Moonlit choral": "Tea House Classics",
+  "Glacial dream-pop": "Firelight Dance", "Sun Warrior dance": "Firelight Dance", "Theater pop": "Firelight Dance",
+  "Glider pop": "Firelight Dance", "Lemur funk": "Firelight Dance", "Wind-chime ambient": "Firelight Dance",
 };
 
 export type FestivalSet = {
