@@ -55,7 +55,7 @@ function PosterName({
   const el = ELEMENTS[set.nation];
   // Headliners sit at 32px so a name fits on one or two lines; the rest are 20px and 17px.
   const type = {
-    headliner: `${TYPE.heading.replace("text-2xl", "text-[28px] sm:text-[34px]")} leading-[1.1]! uppercase md:flex-row-reverse md:text-right`,
+    headliner: `${TYPE.heading.replace("text-2xl", "text-[28px] sm:text-[34px]")} leading-[1.5]! uppercase md:flex-row-reverse md:text-right`,
     major: "text-base sm:text-xl font-bold uppercase tracking-wide leading-tight",
     minor: "text-sm sm:text-[17px] font-bold uppercase tracking-wide leading-tight",
   }[size];
@@ -276,6 +276,7 @@ export function LineupPoster({
 }) {
   const [picked, setPicked] = useState<Picked | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedList = LINEUP.filter((s) => saved.has(s.artist));
 
   const cancelClose = () => {
@@ -287,12 +288,34 @@ export function LineupPoster({
     cancelClose();
     closeTimer.current = setTimeout(() => setPicked((p) => (p?.via === "hover" ? null : p)), 220);
   };
+  const cancelOpen = () => {
+    if (openTimer.current) clearTimeout(openTimer.current);
+    openTimer.current = null;
+  };
+  // Hovering opens the pop-up only once the pointer has rested on a name for half a
+  // second, so names passing under the pointer while you scroll stay quiet.
   const hover = (set: FestivalSet, anchor: HTMLElement) => {
     cancelClose();
-    setPicked((p) => (p?.via === "click" && p.set === set ? p : { set, anchor, via: "hover" }));
+    cancelOpen();
+    openTimer.current = setTimeout(() => {
+      openTimer.current = null;
+      setPicked((p) => (p?.via === "click" && p.set === set ? p : { set, anchor, via: "hover" }));
+    }, 500);
+  };
+  const leave = () => {
+    cancelOpen();
+    scheduleClose();
   };
 
-  useEffect(() => () => clearTimeout(closeTimer.current ?? undefined), []);
+  // Any scroll cancels a pop-up that is still waiting to open.
+  useEffect(() => {
+    window.addEventListener("scroll", cancelOpen, true);
+    return () => {
+      window.removeEventListener("scroll", cancelOpen, true);
+      clearTimeout(closeTimer.current ?? undefined);
+      clearTimeout(openTimer.current ?? undefined);
+    };
+  }, []);
 
   const name = (set: FestivalSet, size: "headliner" | "major" | "minor") => (
     <PosterName
@@ -304,8 +327,9 @@ export function LineupPoster({
       active={picked?.set === set}
       dim={(!!filters && filtersActive(filters) && !matchesFilters(set, filters)) || (!!shown && !shown(set))}
       onHover={(anchor) => hover(set, anchor)}
-      onLeave={scheduleClose}
+      onLeave={leave}
       onPick={(anchor) => {
+        cancelOpen();
         cancelClose();
         setPicked({ set, anchor, via: "click" });
       }}
@@ -318,7 +342,7 @@ export function LineupPoster({
       tabIndex={boxed ? 0 : undefined}
       role={boxed ? "region" : undefined}
       aria-label={boxed ? "Lineup" : undefined}
-      className={`border-[1.5px] border-(--ink) bg-(--parchment) px-4 py-6 sm:px-8 sm:py-8 ${SHAPE.card} ${boxed ? `relative max-h-[calc(100dvh-9rem)] scroll-mt-[8.2rem] overflow-y-auto lg:max-h-[calc(100dvh-6.5rem)] lg:scroll-mt-[5.25rem] ${FOCUS}` : ""}`}
+      className={`border-[1.5px] border-(--ink) bg-(--parchment) px-4 py-6 sm:px-8 sm:py-8 ${SHAPE.card} ${boxed ? `relative max-h-[calc(100dvh-19rem)] scroll-mt-[18.5rem] overflow-y-auto [scrollbar-color:var(--line)_transparent] [scrollbar-width:thin] lg:max-h-[calc(100dvh-13rem)] lg:scroll-mt-[12rem] ${FOCUS}` : ""}`}
     >
       <div className="flex flex-wrap items-end justify-between gap-4">
         {!boxed && (
