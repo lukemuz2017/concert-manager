@@ -18,7 +18,19 @@ export const color = {
 //   wash: a light tint for the selected day.
 export type ElementKey = "water" | "earth" | "fire" | "air";
 
-export type Motion = { name: string; ease: string; duration: string; lift: string; press: string; glow: string; note: string };
+export type Motion = {
+  name: string;
+  ease: string; // easing for color and small-control transitions
+  duration: string;
+  lift: string;
+  press: string;
+  glow: string;
+  hover: string; // button animation while hovered (see globals.css)
+  pressAnim: string; // button animation when pressed
+  hoverLabel: string;
+  pressLabel: string;
+  note: string;
+};
 
 export const ELEMENTS: Record<
   ElementKey,
@@ -52,6 +64,10 @@ export const ELEMENTS: Record<
       lift: "-2px",
       press: "scale(0.97)",
       glow: "none",
+      hover: "bend-water-hover 1.8s ease-in-out infinite, bend-water-ripple 1.8s ease-out infinite",
+      pressAnim: "bend-water-press 520ms ease-out",
+      hoverLabel: "Rocks like a boat, ripples spreading",
+      pressLabel: "Squashes, then springs back",
       note: "Eases in and out like a tide. Nothing starts or stops abruptly.",
     },
   },
@@ -72,7 +88,11 @@ export const ELEMENTS: Record<
       lift: "0px",
       press: "translateY(3px)",
       glow: "none",
-      note: "No float, no bounce. Pressed, it drops straight into the ground.",
+      hover: "bend-earth-hover 380ms linear infinite",
+      pressAnim: "bend-earth-press 380ms cubic-bezier(0.2, 0, 0.1, 1) forwards",
+      hoverLabel: "Earthquake: a hard, rapid shake",
+      pressLabel: "Slams down and stays down",
+      note: "No float, no bounce. It shakes the ground, and pressed, it drops straight into it.",
     },
   },
   fire: {
@@ -92,7 +112,11 @@ export const ELEMENTS: Record<
       lift: "-2px",
       press: "scale(0.94)",
       glow: "0 0 0 5px rgba(168, 69, 48, 0.2)",
-      note: "Fast and a little explosive: it overshoots, flares, then settles.",
+      hover: "bend-fire-hover 800ms ease-in-out infinite",
+      pressAnim: "bend-fire-press 340ms cubic-bezier(0.2, 0.9, 0.3, 1.2) forwards",
+      hoverLabel: "Flares and flickers, glowing",
+      pressLabel: "Bursts, then settles hot",
+      note: "Fast and explosive: it flares, flickers, and glows, then bursts when pressed.",
     },
   },
   air: {
@@ -112,7 +136,11 @@ export const ELEMENTS: Record<
       lift: "-5px",
       press: "scale(0.98)",
       glow: "none",
-      note: "Slow and light: it rises on hover and settles back gently.",
+      hover: "bend-air-hover 2.6s ease-in-out infinite",
+      pressAnim: "bend-air-press 620ms ease-in-out",
+      hoverLabel: "Floats up and bobs, weightless",
+      pressLabel: "Puffs and twirls, then drifts",
+      note: "Slow and weightless: it lifts off, bobs on the breeze, and twirls when pressed.",
     },
   },
 };
@@ -132,6 +160,8 @@ export function elementVars(key: ElementKey) {
     "--el-lift": e.motion.lift,
     "--el-press": e.motion.press,
     "--el-glow": e.motion.glow,
+    "--el-hover": e.motion.hover,
+    "--el-press-anim": e.motion.pressAnim,
   } as CSSProperties;
 }
 

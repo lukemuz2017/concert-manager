@@ -1,7 +1,8 @@
 import type { ElementKey } from "./tokens";
 
-// Stages belong to a nation, shown by its emblem. Days belong to an element,
-// shown by color. Color tells you the day; the emblem tells you the place.
+// The Four Nations lineup: 100 artists, 25 from each nation, 25 a day across
+// Thursday to Sunday. Each day belongs to an element (its color); each artist
+// belongs to a nation (their emblem and underline).
 
 export const STAGES = [
   { name: "Northern Water Tribe", nation: "water" },
@@ -14,31 +15,137 @@ export const STAGES = [
 export type Stage = (typeof STAGES)[number];
 
 export const SLOTS = ["1:00 PM", "2:30 PM", "4:00 PM", "5:30 PM", "7:00 PM", "8:30 PM"] as const;
+export type Slot = (typeof SLOTS)[number];
+
+export const DAY_ORDER: ElementKey[] = ["water", "earth", "fire", "air"];
 
 export type FestivalSet = {
   artist: string;
+  nation: ElementKey;
   blurb: string;
   day: ElementKey;
-  time: (typeof SLOTS)[number];
+  time: Slot;
   stage: Stage;
 };
 
-const stage = (name: Stage["name"]) => STAGES.find((s) => s.name === name)!;
+/* The artists ---------------------------------------------------------------- */
 
-// Fire Lilies and the Ember Island Players share Saturday at 7:00: saving both is a clash.
-export const SAMPLE_SETS: FestivalSet[] = [
-  { artist: "The Southern Raiders", blurb: "Whale-bone drums and war songs from the south.", day: "water", time: "2:30 PM", stage: stage("Northern Water Tribe") },
-  { artist: "Secret Tunnel", blurb: "Folk trio from the mountain caves outside Omashu.", day: "water", time: "5:30 PM", stage: stage("Omashu") },
-  { artist: "Moon Spirit Choir", blurb: "Chants for a full moon over the oasis.", day: "water", time: "8:30 PM", stage: stage("Northern Water Tribe") },
-  { artist: "Cabbage Merchant Brass", blurb: "A marching band. Please mind the cart.", day: "earth", time: "2:30 PM", stage: stage("Omashu") },
-  { artist: "The Boulder", blurb: "Earth Rumble anthems, played extremely loud.", day: "earth", time: "7:00 PM", stage: stage("Ba Sing Se") },
-  { artist: "Kyoshi Warriors", blurb: "Fans, face paint, and a very tight rhythm section.", day: "earth", time: "5:30 PM", stage: stage("Omashu") },
-  { artist: "Fire Lilies", blurb: "Sun Warrior dance music at golden hour.", day: "fire", time: "7:00 PM", stage: stage("Fire Nation Capital") },
-  { artist: "The Ember Island Players", blurb: "Theater pop, wildly inaccurate, beloved anyway.", day: "fire", time: "7:00 PM", stage: stage("Ember Island") },
-  { artist: "Dragon of the West", blurb: "Slow jazz, served with tea.", day: "fire", time: "8:30 PM", stage: stage("Fire Nation Capital") },
-  { artist: "Air Nomad Chant", blurb: "Bells, wind, and long silences.", day: "air", time: "4:00 PM", stage: stage("Western Air Temple") },
-  { artist: "Sky Bison Drift", blurb: "Ambient music, played from very high up.", day: "air", time: "8:30 PM", stage: stage("Western Air Temple") },
+// Three headliners a day, from three different nations; every nation headlines three times.
+const HEADLINERS: Record<ElementKey, [string, ElementKey][]> = {
+  water: [
+    ["Moon Spirit Choir", "water"],
+    ["The Ember Island Players", "fire"],
+    ["Kyoshi Warriors", "earth"],
+  ],
+  earth: [
+    ["Toph & the Blind Bandits", "earth"],
+    ["Appa & the Herd", "air"],
+    ["Yue & the Tides", "water"],
+  ],
+  fire: [
+    ["Dragon of the West", "fire"],
+    ["The Boulder", "earth"],
+    ["Monk Gyatso", "air"],
+  ],
+  air: [
+    ["The Southern Raiders", "water"],
+    ["Air Nomad Chant", "air"],
+    ["Fire Lilies", "fire"],
+  ],
+};
+
+// Everyone else, 22 per nation, in billing order.
+const ARTISTS: Record<ElementKey, string[]> = {
+  water: [
+    "Whale-Tooth Drums", "Ocean Spirit", "The Polar Leopards", "Tui & La", "Northern Lights",
+    "Pakku's Pupils", "Foggy Swamp Tribe", "The Unagi", "Spirit Oasis", "Wolf Cove", "Glacier Spirits",
+    "Healing Hands", "Bato's Boat", "Blood Moon", "Snowbenders", "Sea Prunes", "Ice Dodgers",
+    "Arctic Hens", "Otter Penguin Slide", "The Canoe Club", "Hundred-Year Iceberg", "The Waterbending Scroll",
+  ],
+  earth: [
+    "Secret Tunnel", "The Dai Li", "Earth Rumble Six", "Bumi's Bunch", "Jasmine Dragon Trio",
+    "Badgermoles", "Cabbage Merchant Brass", "Si Wong Sandbenders", "The Freedom Fighters", "Lake Laogai", "The Mechanist",
+    "Omashu Mail Chute", "Bosco the Bear", "Elephant Koi", "Lower Ring", "Pao Family Tea Shop", "Joo Dee Smiles",
+    "The Hippo", "Outer Wall", "Gaoling Prep", "Rock Gloves", "Earth King's Court",
+  ],
+  fire: [
+    "Sun Warriors", "Agni Kai", "Combustion Man", "Ran & Shaw", "Mai & the Knives",
+    "Ty Lee's Circus", "Royal Fire Orchestra", "Lightning Redirected", "The Boiling Rock", "Phoenix King", "Fire Sages",
+    "Kuzon's Crew", "Ember Island Beach Party", "Sozin's Comet", "Day of Black Sun", "Volcano Island", "Shirshu Trackers",
+    "Komodo Rhinos", "Hot Squats", "Fire Flakes", "Uncle's Pai Sho", "Rough Rhinos",
+  ],
+  air: [
+    "Sky Bison Drift", "Guru Pathik", "The Glider Boys", "Seven Chakras", "Momo's Mischief",
+    "Western Air Temple Echo", "Eastern Air Temple Bells", "Teo's Gliders", "Air Scooters", "Cloud Kites", "Wind Chimes",
+    "Meditation Circle", "Flying Lemurs", "Arrows & Tattoos", "The Last Airbender", "Fruit Pie Game", "Airball Champions",
+    "Sky Bison Polo", "Whistle Pipes", "Updraft", "Spirit World Wanderers", "The Airbending Staff",
+  ],
+};
+
+const GENRES: Record<ElementKey, string[]> = {
+  water: ["Tidal folk", "Ice-cave ambient", "Whale-bone percussion", "Moonlit choral", "Sea shanties", "Glacial dream-pop"],
+  earth: ["Stone-and-gong rock", "Earth Rumble metal", "Tea-house jazz", "Desert blues", "Brass band", "Mountain folk"],
+  fire: ["Sun Warrior dance", "Volcanic drum and bass", "Court orchestra", "Theater pop", "Lantern-lit jazz", "Comet punk"],
+  air: ["Temple bells", "Wind-chime ambient", "Glider pop", "Chant and drone", "Sky folk", "Lemur funk"],
+};
+
+// How many non-headliners each nation sends to each day (22 a day, 22 per nation).
+const PER_DAY: Record<ElementKey, Record<ElementKey, number>> = {
+  water: { water: 5, earth: 6, fire: 5, air: 6 },
+  earth: { water: 6, earth: 5, fire: 6, air: 5 },
+  fire: { water: 5, earth: 6, fire: 5, air: 6 },
+  air: { water: 6, earth: 5, fire: 6, air: 5 },
+};
+
+// Slots fill from the top of the bill: 3 at 8:30, then 5, 5, 4, 4, 4.
+const BILL: Slot[] = [
+  ...Array<Slot>(3).fill("8:30 PM"),
+  ...Array<Slot>(5).fill("7:00 PM"),
+  ...Array<Slot>(5).fill("5:30 PM"),
+  ...Array<Slot>(4).fill("4:00 PM"),
+  ...Array<Slot>(4).fill("2:30 PM"),
+  ...Array<Slot>(4).fill("1:00 PM"),
 ];
+
+function buildLineup(): FestivalSet[] {
+  const taken: Record<ElementKey, number> = { water: 0, earth: 0, fire: 0, air: 0 };
+  const sets: FestivalSet[] = [];
+
+  for (const day of DAY_ORDER) {
+    // Each nation's share of the day, then dealt out in turn so the bill mixes.
+    const pools = DAY_ORDER.map((n) => {
+      const names = ARTISTS[n].slice(taken[n], taken[n] + PER_DAY[day][n]);
+      taken[n] += PER_DAY[day][n];
+      return names.map((artist) => [artist, n] as [string, ElementKey]);
+    });
+    const dealt: [string, ElementKey][] = [...HEADLINERS[day]];
+    for (let i = 0; pools.some((p) => p.length > 0); i++) {
+      const pool = pools[i % pools.length];
+      const next = pool.shift();
+      if (next) dealt.push(next);
+    }
+
+    // Stages: prefer one that belongs to the artist's nation, else the next free one.
+    const used: Partial<Record<Slot, Set<string>>> = {};
+    dealt.forEach(([artist, nation], i) => {
+      const time = BILL[i];
+      const free = (used[time] ??= new Set());
+      const home = STAGES.find((s) => s.nation === nation && !free.has(s.name));
+      const stage = home ?? STAGES[[...Array(6).keys()].map((k) => (i + k) % 6).find((k) => !free.has(STAGES[k].name))!];
+      free.add(stage.name);
+      const genres = GENRES[nation];
+      sets.push({ artist, nation, blurb: genres[(i + DAY_ORDER.indexOf(day)) % genres.length], day, time, stage });
+    });
+  }
+  return sets;
+}
+
+export const LINEUP = buildLineup();
+
+// 8:30 sets headline; billing comes from the slot.
+export function isHeadliner(set: FestivalSet) {
+  return set.time === "8:30 PM";
+}
 
 // Other saved sets on the same day and in the same slot.
 export function clashesWith(set: FestivalSet, saved: FestivalSet[]) {

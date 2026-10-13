@@ -53,14 +53,24 @@ const BEND_PINNED = {
   pressed: "[transform:var(--el-press)]!",
 };
 
+// Buttons bend big: each element runs its own keyframe animation on hover (water
+// rocks, earth quakes, fire flares, air floats) and another when pressed.
+const BEND_BIG =
+  "transition-[background-color,filter] duration-(--el-dur) ease-(--el-ease) enabled:hover:[animation:var(--el-hover)] enabled:active:[animation:var(--el-press-anim)] motion-reduce:transition-none motion-reduce:[animation:none]!";
+const BIG_PINNED = {
+  hover: "[animation:var(--el-hover)]!",
+  pressed: "[transform:var(--el-press)]!",
+};
+
 // Disabled is "unbent": a dotted pencil edge, muted ink, no fill, no motion.
 const DISABLED =
   "disabled:cursor-not-allowed disabled:border-dotted disabled:border-(--line)! disabled:bg-transparent! disabled:text-(--ink-muted)! disabled:[box-shadow:none]! disabled:filter-none!";
 
-function pin(extra: { hover: string; pressed: string }, force?: Force) {
+function pin(extra: { hover: string; pressed: string }, force?: Force, big = false) {
+  const base = big ? BIG_PINNED : BEND_PINNED;
   if (force === "focus") return FOCUSED;
-  if (force === "hover") return `${BEND_PINNED.hover} ${extra.hover}`;
-  if (force === "pressed") return `${BEND_PINNED.pressed} ${extra.pressed}`;
+  if (force === "hover") return `${base.hover} ${extra.hover}`;
+  if (force === "pressed") return `${base.pressed} ${extra.pressed}`;
   return "";
 }
 
@@ -158,6 +168,35 @@ export function Emblem({ element, className = "h-6 w-6" }: { element: ElementKey
   );
 }
 
+// An artist's nation: its emblem in the nation's line color, optionally named.
+export function NationMark({
+  nation,
+  label = false,
+  className = "h-5 w-5",
+}: {
+  nation: ElementKey;
+  label?: boolean;
+  className?: string;
+}) {
+  const el = ELEMENTS[nation];
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5" style={{ color: el.line }}>
+      <Emblem element={nation} className={className} />
+      {label && <span className="text-(--ink)">{el.nation}</span>}
+    </span>
+  );
+}
+
+// Where the set is, as its own labeled line: the stage name is the one thing to find.
+export function StageLine({ stage }: { stage: string }) {
+  return (
+    <p className="mt-3 flex items-baseline gap-3 border-y-[1.5px] border-dashed border-(--line) py-2">
+      <span className={`${TYPE.label} w-12 shrink-0 text-(--ink-muted)`}>Stage</span>
+      <span className="text-lg leading-tight font-bold">{stage}</span>
+    </p>
+  );
+}
+
 export function CheckIcon({ className = "h-4 w-4" }: { className?: string }) {
   return (
     <svg aria-hidden="true" viewBox="0 0 16 16" className={`shrink-0 ${className}`}>
@@ -198,7 +237,7 @@ export function Seal({ className = "h-7 w-7 text-base" }: { className?: string }
 
 /* Buttons and link ----------------------------------------------------------- */
 
-const BUTTON_BASE = `inline-flex items-center justify-center gap-2 border-[1.5px] px-5 py-2.5 font-medium whitespace-nowrap enabled:cursor-pointer ${SHAPE.button} ${BEND} ${FOCUS} ${DISABLED}`;
+const BUTTON_BASE = `inline-flex items-center justify-center gap-2 border-[1.5px] px-5 py-2.5 font-medium whitespace-nowrap enabled:cursor-pointer ${SHAPE.button} ${BEND_BIG} ${FOCUS} ${DISABLED}`;
 
 const BUTTON = {
   primary: {
@@ -226,7 +265,7 @@ export function Button({
   ...props
 }: ComponentProps<"button"> & { variant?: "primary" | "secondary"; force?: Force }) {
   const recipe = BUTTON[variant];
-  return <button type="button" className={`${BUTTON_BASE} ${recipe.rest} ${pin(recipe, force)} ${className}`} {...props} />;
+  return <button type="button" className={`${BUTTON_BASE} ${recipe.rest} ${pin(recipe, force, true)} ${className}`} {...props} />;
 }
 
 // The product's main action. In the day's element until you press it; ink once it's yours.
@@ -255,7 +294,7 @@ export function AddButton({
       aria-label={artist ? `${added ? addedLabel : label}: ${artist}` : undefined}
       disabled={disabled}
       onClick={onToggle}
-      className={`${BUTTON_BASE} ${recipe.rest} ${pin(recipe, force)}`}
+      className={`${BUTTON_BASE} ${recipe.rest} ${pin(recipe, force, true)}`}
     >
       {added ? <CheckIcon /> : <PlusIcon />}
       {added ? addedLabel : label}
@@ -595,10 +634,7 @@ export function SetCard({
         </p>
         <h3 className={`mt-2 ${TYPE.heading}`}>{set.artist}</h3>
         <p className="mt-1 text-(--ink-muted)">{set.blurb}</p>
-        <p className="mt-3 flex items-center gap-2 font-medium">
-          <Emblem element={set.stage.nation} className="h-5 w-5" />
-          {set.stage.name}
-        </p>
+        <StageLine stage={set.stage.name} />
         <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-3">
           <AddButton added={saved} onToggle={onToggle} />
           {onDetails && (
@@ -630,13 +666,15 @@ export function LineupRow({
       className={`flex items-center gap-3 border-b-[1.5px] border-dashed border-(--line) px-2 py-3.5 last:border-b-0 sm:gap-4 ${saved ? "bg-(--el-wash)" : ""}`}
     >
       <span className={`w-14 shrink-0 ${TYPE.label} tracking-[0.08em]! text-(--ink-muted)`}>{set.time}</span>
-      <Emblem element={set.stage.nation} className="h-6 w-6" />
+      <NationMark nation={set.nation} className="h-6 w-6" />
       <span className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
         <span className="min-w-0">
+          {/* Underlined in the artist's nation color; the line bends into a wave on hover. */}
           <button
             type="button"
             onClick={onDetails}
-            className={`block cursor-pointer rounded-sm text-left font-medium underline decoration-(--line) decoration-dotted decoration-[1.5px] underline-offset-4 hover:decoration-(--el-line) hover:decoration-wavy ${FOCUS}`}
+            className={`block cursor-pointer rounded-sm text-left font-medium underline decoration-2 underline-offset-4 hover:decoration-wavy ${FOCUS}`}
+            style={{ textDecorationColor: ELEMENTS[set.nation].line }}
           >
             {set.artist}
           </button>
@@ -704,10 +742,7 @@ export function ScrollPanel({
         <h3 id={titleId} className={`mt-1 ${TYPE.heading}`}>
           {set.artist}
         </h3>
-        <p className="mt-2 flex items-center gap-2 font-medium">
-          <Emblem element={set.stage.nation} className="h-5 w-5" />
-          {set.stage.name}
-        </p>
+        <StageLine stage={set.stage.name} />
         <p className="mt-3">{set.blurb}</p>
         {clashes.length > 0 && (
           <p className="mt-4 flex items-center gap-3">
@@ -863,7 +898,7 @@ export function JourneyPath({ day, saved }: { day: ElementKey; saved: FestivalSe
               {clashed && <Seal className="h-5 w-5 text-xs" />}
             </p>
             <p className="flex items-center gap-1.5 text-sm text-(--ink-muted)">
-              <Emblem element={s.stage.nation} className="h-4 w-4" />
+              <NationMark nation={s.nation} className="h-4 w-4" />
               {s.stage.name}
             </p>
             {leg && next && (

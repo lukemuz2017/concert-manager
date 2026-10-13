@@ -4,7 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 
 import { contrast, grade } from "@/app/_lib/contrast";
 import { fontVariables } from "@/app/_themes/avatar/fonts";
-import { SAMPLE_SETS } from "@/app/_themes/avatar/lineup";
+import { LINEUP } from "@/app/_themes/avatar/lineup";
 import { color, ELEMENT_ORDER, ELEMENTS, elementVars, SHAPE, TYPE } from "@/app/_themes/avatar/tokens";
 import {
   AddButton,
@@ -15,6 +15,7 @@ import {
   ElementScope,
   Emblem,
   IconButton,
+  NationMark,
   PassportStamp,
   Radio,
   Seal,
@@ -105,8 +106,8 @@ const TYPE_ROLES = [
     use: "Everything you read.",
     sample: (
       <p className={`max-w-prose ${TYPE.body}`}>
-        Kyoshi Warriors end at 7:00 in Omashu, and The Boulder starts then in Ba Sing Se.
-        Leave <b>ten minutes early</b>, or miss the opening.
+        Bosco the Bear plays Ba Sing Se at 5:30, and Kuzon&apos;s Crew start at 7:00 across the grounds.
+        Leave <b>eleven minutes early</b>, or miss the opening.
       </p>
     ),
   },
@@ -297,8 +298,9 @@ function Card({ className = "", style, children }: { className?: string; style?:
 }
 
 export default function FourNationsDesignSystem() {
-  const players = SAMPLE_SETS.find((s) => s.artist === "The Ember Island Players")!;
-  const lilies = SAMPLE_SETS.find((s) => s.artist === "Fire Lilies")!;
+  const players = LINEUP.find((s) => s.artist === "The Ember Island Players")!;
+  const sages = LINEUP.find((s) => s.artist === "Kuzon's Crew")!;
+  const healers = LINEUP.find((s) => s.artist === "Healing Hands")!;
 
   return (
     <ElementScope initial="fire" className={`${fontVariables} min-h-screen bg-(--parchment) text-(--ink)`} style={{ fontFamily: "var(--font-alegreya-sans)" }}>
@@ -336,14 +338,26 @@ export default function FourNationsDesignSystem() {
               </li>
               <li>
                 <Card className="h-full">
-                  <p className={TYPE.heading}>Color is the day, the emblem is the place</p>
+                  <p className={TYPE.heading}>Color is the day, the emblem is the nation</p>
                   <p className="mt-2 text-(--ink-muted)">
-                    Six stages, four nations: each stage wears its nation&rsquo;s emblem and name, in ink.
+                    Every artist wears their nation&rsquo;s emblem and an underline in its color. The name
+                    itself stays ink, so it can always be read.
                   </p>
-                  <div inert className="mt-4 flex flex-wrap gap-2">
-                    <StageChip name="Ba Sing Se" nation="earth" />
-                    <StageChip name="Ember Island" nation="fire" />
-                  </div>
+                  <p className="mt-4 flex flex-wrap gap-x-4 gap-y-2 font-bold uppercase">
+                    {(["Kyoshi Warriors", "Sun Warriors"] as const).map((artist, i) => {
+                      const nation = i === 0 ? "earth" : "fire";
+                      return (
+                        <span
+                          key={artist}
+                          className="inline-flex items-center gap-1.5 underline decoration-[3px] underline-offset-[6px]"
+                          style={{ textDecorationColor: ELEMENTS[nation].line }}
+                        >
+                          <NationMark nation={nation} className="h-4 w-4" />
+                          {artist}
+                        </span>
+                      );
+                    })}
+                  </p>
                 </Card>
               </li>
               <li>
@@ -582,7 +596,7 @@ export default function FourNationsDesignSystem() {
             id="motion"
             n={4}
             title="Bending: motion"
-            intro="Every element moves its own way, and every control borrows the motion of the day. Hover and press each button to feel the difference. With reduced motion turned on, nothing lifts, presses, or glides."
+            intro="Every element moves its own way. Buttons bend big: water rocks and ripples, earth quakes and slams, fire flares and bursts, air floats and twirls. Hover and press each one. Chips and small controls borrow the same easing, quietly. With reduced motion turned on, nothing moves at all."
           >
             <MotionLab />
           </Section>
@@ -672,7 +686,7 @@ export default function FourNationsDesignSystem() {
 
               <figure className="flex flex-col gap-3">
                 <figcaption className={`${TYPE.label} text-(--ink-muted)`}>Error · a clash</figcaption>
-                <ClashNotice sets={[players, lilies]} />
+                <ClashNotice sets={[sages, healers]} />
               </figure>
 
               <figure className="flex flex-col gap-3">

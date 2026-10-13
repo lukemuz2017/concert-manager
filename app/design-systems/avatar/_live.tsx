@@ -3,7 +3,8 @@
 import Image from "next/image";
 import { useId, useState } from "react";
 
-import { clashesWith, SAMPLE_SETS, SLOTS, STAGES } from "@/app/_themes/avatar/lineup";
+import { clashesWith, LINEUP, SLOTS, STAGES } from "@/app/_themes/avatar/lineup";
+import { LineupPoster } from "@/app/_themes/avatar/poster";
 import { ELEMENT_ORDER, ELEMENTS, elementVars, SHAPE, TYPE, type ElementKey } from "@/app/_themes/avatar/tokens";
 import {
   AddButton,
@@ -37,7 +38,7 @@ import town from "@/app/mood-boards/avatar/images/town.jpg";
 
 import { Panel } from "./_parts";
 
-const find = (artist: string) => SAMPLE_SETS.find((s) => s.artist === artist)!;
+const find = (artist: string) => LINEUP.find((s) => s.artist === artist)!;
 
 function toggled(set: Set<string>, key: string) {
   const next = new Set(set);
@@ -123,17 +124,18 @@ export function MotionLab() {
             </div>
             <p className={`mt-3 ${TYPE.heading}`}>{el.motion.name}</p>
             <p className={`${TYPE.label} text-(--ink-muted)`}>{el.name}</p>
+            <dl className="mt-4 text-sm">
+              <dt className={`${TYPE.label} text-(--ink-muted)`}>Hover</dt>
+              <dd className="font-bold">{el.motion.hoverLabel}</dd>
+              <dt className={`${TYPE.label} mt-3 text-(--ink-muted)`}>Press</dt>
+              <dd className="font-bold">{el.motion.pressLabel}</dd>
+            </dl>
             <div className="mt-4 flex items-center gap-3">
               <Curve ease={el.motion.ease} />
-              <dl className="text-sm">
-                <dt className="text-(--ink-muted)">Duration</dt>
-                <dd className="font-bold">{el.motion.duration}</dd>
-                <dt className="mt-1 text-(--ink-muted)">Hover lift</dt>
-                <dd className="font-bold">{el.motion.lift === "0px" ? "none" : el.motion.lift.replace("-", "")}</dd>
-              </dl>
+              <p className="text-sm text-(--ink-muted)">Color and small-control easing, {el.motion.duration}.</p>
             </div>
             <p className="mt-3 flex-1 text-(--ink-muted)">{el.motion.note}</p>
-            <div className="mt-5">
+            <div className="mt-6 flex justify-center py-4">
               <Button>Hover, then press</Button>
             </div>
           </div>
@@ -148,7 +150,7 @@ export function MotionLab() {
 export function LiveComponents() {
   const { element } = useElement();
   const [saved, setSaved] = useState(
-    () => new Set(["The Ember Island Players", "Secret Tunnel", "Kyoshi Warriors", "The Boulder"]),
+    () => new Set(["Bosco the Bear", "Kuzon's Crew", "Dragon of the West", "Moon Spirit Choir", "Badgermoles"]),
   );
   const [stages, setStages] = useState(() => new Set<string>());
   const [query, setQuery] = useState("");
@@ -161,10 +163,10 @@ export function LiveComponents() {
   const ids = useId();
 
   const toggle = (artist: string) => setSaved((prev) => toggled(prev, artist));
-  const savedList = SAMPLE_SETS.filter((s) => saved.has(s.artist));
+  const savedList = LINEUP.filter((s) => saved.has(s.artist));
   const clashing = (artist: string) => warn && saved.has(artist) && clashesWith(find(artist), savedList).length > 0;
 
-  const rows = SAMPLE_SETS.filter(
+  const rows = LINEUP.filter(
     (s) =>
       s.day === element &&
       (stages.size === 0 || stages.has(s.stage.name)) &&
@@ -192,8 +194,16 @@ export function LiveComponents() {
   return (
     <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
       <Panel
+        title="Lineup poster"
+        note="All 100 artists, a band per day. Each name wears its nation's emblem and underline. Hover a name, or click it, for the time, the stage, and the add button."
+        className="lg:col-span-2"
+      >
+        <LineupPoster saved={saved} onToggle={toggle} />
+      </Panel>
+
+      <Panel
         title="Lineup: day tabs, stage chips, rows & clash"
-        note="The day tabs are today's element: pick one and the whole page follows. On Saturday, add Fire Lilies to collide with the Ember Island Players at 7:00."
+        note="The day tabs are today's element: pick one and the whole page follows. On Saturday, add Healing Hands to collide with Kuzon's Crew at 7:00."
         className="lg:col-span-2"
       >
         <div className="grid gap-10 lg:grid-cols-[250px_1fr]">
@@ -260,14 +270,14 @@ export function LiveComponents() {
 
       <Panel
         title="Journey: path, map & next up"
-        note="Your day as a route. Friday shows a tight walk: Kyoshi Warriors end at 7:00 in Omashu, and The Boulder starts then in Ba Sing Se. The clock is set to 6:40 PM."
+        note="Your day as a route. Saturday shows a tight walk: Bosco the Bear plays Ba Sing Se at 5:30, and Kuzon's Crew start at 7:00 on another stage. The clock is set to 6:40 PM."
         className="lg:col-span-2"
       >
         <div className="grid items-start gap-8 lg:grid-cols-[1fr_1.3fr]">
           <JourneyPath day={element} saved={savedList} />
           <div className="flex flex-col gap-5">
             <JourneyMap day={element} saved={savedList} />
-            <NextUp day={element} saved={savedList} lineup={SAMPLE_SETS} />
+            <NextUp day={element} saved={savedList} lineup={LINEUP} />
           </div>
         </div>
       </Panel>
