@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useId, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import festivalPoster from "@/app/mood-boards/avatar/images/festival-poster.jpg";
 
@@ -22,6 +23,7 @@ import {
   FilterChips,
   filterChips,
   FilterGroups,
+  FilterIcon,
   FlagIcon,
   FOCUS,
   IconButton,
@@ -45,16 +47,35 @@ import {
 
 // The Four Nations site. The day in view is the "element", and the whole page takes it on:
 // color, emblem, and motion. My journey lives in a drawer that slides over the page.
+// The planner's state lives in the shell, which the /planner layout keeps mounted, so a
+// journey survives moving between the lineup and the festival page. Nothing is saved beyond that.
 
 type Show = "all" | "journey" | "flagged";
 
-function Counted({ name, count }: { name: string; count: number }) {
-  return (
-    <span className="flex items-center gap-2">
-      {name}
-      <span className="text-sm text-(--ink-muted) tabular-nums">{count}</span>
-    </span>
-  );
+type Planner = {
+  saved: Set<string>;
+  flagged: Set<string>;
+  savedList: FestivalSet[];
+  toggle: (artist: string) => void;
+  flag: (artist: string) => void;
+  query: string;
+  setQuery: (q: string) => void;
+  filters: Filters;
+  setFilters: (f: Filters) => void;
+  show: Show;
+  setShow: (s: Show) => void;
+  hideClashes: boolean;
+  setHideClashes: (on: boolean) => void;
+  // The lineup page tells the header how to bring a day into view.
+  registerDayJump: (jump: ((day: ElementKey) => void) | null) => void;
+};
+
+const PlannerContext = createContext<Planner | null>(null);
+
+function usePlanner() {
+  const value = useContext(PlannerContext);
+  if (!value) throw new Error("usePlanner needs <FourNationsSite> above it");
+  return value;
 }
 
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -66,103 +87,78 @@ function toggled(set: Set<string>, key: string) {
   return next;
 }
 
-export function FourNationsSite() {
+export function FourNationsSite({ children }: { children: ReactNode }) {
   return (
     <ElementScope
       initial="water"
-      className={`${fontVariables} min-h-screen bg-(--parchment) text-(--ink)`}
+      className={`${fontVariables} isolate min-h-screen bg-(--parchment) text-(--ink)`}
       style={{ fontFamily: "var(--font-alegreya-sans)" }}
     >
-      <Site />
+      <Shell>{children}</Shell>
     </ElementScope>
   );
 }
 
-function Site() {
+/* The shell: header, footer, the journey drawer, and the planner's state ----------- */
+
+function Shell({ children }: { children: ReactNode }) {
   const { element, setElement } = useElement();
+  const router = useRouter();
   const [saved, setSaved] = useState(() => new Set<string>());
   const [flagged, setFlagged] = useState(() => new Set<string>());
-  const [filters, setFilters] = useState<Filters>(noFilters);
   const [query, setQuery] = useState("");
+  const [filters, setFilters] = useState<Filters>(noFilters);
   const [show, setShow] = useState<Show>("all");
   const [hideClashes, setHideClashes] = useState(false);
-  const [filtering, setFiltering] = useState(false);
-  // "auto" when an add opened it (focus stays put); "user" when the header button did.
-  const [open, setOpen] = useState<false | "auto" | "user">(false);
+  // The drawer only ever opens when you ask for it.
+  const [open, setOpen] = useState(false);
+  // A clash flag that pops up after an add, then fades.
+  const [clashFlag, setClashFlag] = useState<{ id: number; set: FestivalSet; with: FestivalSet[] } | null>(null);
+  const [flagShown, setFlagShown] = useState(false);
+  const flagTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const [tab, setTab] = useState<"journey" | "interested">("journey");
   const [warn, setWarn] = useState(true);
-  const seen = useRef(false);
   const journeyButton = useRef<HTMLButtonElement>(null);
+  const dayJump = useRef<((day: ElementKey) => void) | null>(null);
+  const registerDayJump = useCallback((jump: ((day: ElementKey) => void) | null) => {
+    dayJump.current = jump;
+  }, []);
 
   const savedList = LINEUP.filter((s) => saved.has(s.artist));
   const flaggedList = LINEUP.filter((s) => flagged.has(s.artist));
-
-  // Search & filter: one test of who matches. Everyone else fades back on the poster.
-  const q = query.trim().toLowerCase();
-  const isShown = (s: FestivalSet) =>
-    matchesFilters(s, filters) &&
-    (q === "" || s.artist.toLowerCase().includes(q)) &&
-    (show === "all" || (show === "journey" ? saved.has(s.artist) : flagged.has(s.artist))) &&
-    !(hideClashes && !saved.has(s.artist) && clashesWith(s, savedList).length > 0);
-  const shownCount = LINEUP.filter(isShown).length;
-  const active: ActiveFilter[] = [
-    ...(q ? [{ key: "q", label: `“${query.trim()}”`, remove: () => setQuery("") }] : []),
-    ...filterChips(filters, setFilters),
-    ...(show !== "all"
-      ? [{ key: "show", label: show === "journey" ? "Only my journey" : "Only flagged", remove: () => setShow("all") }]
-      : []),
-    ...(hideClashes ? [{ key: "clash", label: "No clashes", remove: () => setHideClashes(false) }] : []),
-  ];
-  const clearAll = () => {
-    setQuery("");
-    setFilters(noFilters());
-    setShow("all");
-    setHideClashes(false);
-  };
   const clashCount = warn
     ? ELEMENT_ORDER.reduce((n, d) => n + SLOTS.filter((t) => savedList.filter((s) => s.day === d && s.time === t).length > 1).length, 0)
     : 0;
 
-  // Scroll spy: the day whose band is at the top of the view becomes the page's element.
-  useEffect(() => {
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) if (e.isIntersecting) setElement((e.target as HTMLElement).dataset.day as ElementKey);
-      },
-      { rootMargin: "-20% 0px -70% 0px" },
-    );
-    document.querySelectorAll<HTMLElement>("section[data-day]").forEach((el) => io.observe(el));
-    return () => io.disconnect();
-  }, [setElement]);
-
+  // On the lineup, a day button scrolls to that day; anywhere else it goes to the lineup.
   function goToDay(day: ElementKey) {
     setElement(day);
-    document
-      .querySelector(`section[data-day="${day}"]`)
-      ?.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
+    if (dayJump.current) dayJump.current(day);
+    else router.push(`/planner#${day}`);
   }
 
-  // On wider screens the drawer opens by itself on the first add, and again whenever an add
-  // causes a clash. On a phone it would cover the page, so the pop-up shows the clash instead.
+  // Adding never opens the drawer. An add that clashes raises a flag that fades on its own.
+  function raiseClashFlag(set: FestivalSet, others: FestivalSet[]) {
+    flagTimers.current.forEach(clearTimeout);
+    setClashFlag({ id: Date.now(), set, with: others });
+    setFlagShown(true);
+    flagTimers.current = [setTimeout(() => setFlagShown(false), 4500), setTimeout(() => setClashFlag(null), 5000)];
+  }
+
   function toggle(artist: string) {
     const set = LINEUP.find((s) => s.artist === artist)!;
     if (saved.has(artist)) {
       setSaved((prev) => toggled(prev, artist));
       return;
     }
-    const clash = warn && clashesWith(set, savedList).length > 0;
+    const others = warn ? clashesWith(set, savedList) : [];
     setSaved((prev) => toggled(prev, artist));
     setFlagged((prev) => {
       const next = new Set(prev);
       next.delete(artist); // adding to the journey answers "interested"
       return next;
     });
-    if (window.matchMedia("(min-width: 640px)").matches && (!seen.current || clash)) {
-      seen.current = true;
-      setElement(set.day);
-      setTab("journey");
-      setOpen((o) => o || "auto");
-    }
+    if (others.length > 0) raiseClashFlag(set, others);
   }
 
   function keep(artist: string) {
@@ -174,17 +170,42 @@ function Site() {
     });
   }
 
-  function openDrawer(next: boolean) {
-    if (next) seen.current = true;
-    setOpen(next ? "user" : false);
+  function openDrawer(next: boolean, day?: ElementKey) {
+    if (next && day) {
+      setElement(day);
+      setTab("journey");
+    }
+    setOpen(next);
     if (!next) setTimeout(() => journeyButton.current?.focus());
   }
 
+  const planner: Planner = {
+    saved,
+    flagged,
+    savedList,
+    toggle,
+    flag: (artist) => setFlagged((p) => toggled(p, artist)),
+    query,
+    setQuery,
+    filters,
+    setFilters,
+    show,
+    setShow,
+    hideClashes,
+    setHideClashes,
+    registerDayJump,
+  };
+
   return (
-    <>
+    <PlannerContext.Provider value={planner}>
       <header className="sticky top-0 z-30 border-b-[1.5px] border-(--ink) bg-(--parchment)/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-3 px-4 py-3 sm:gap-x-6 sm:px-8">
-          <p className={`${TYPE.heading} min-w-0 grow basis-0 truncate lg:grow-0 lg:basis-auto`}>The Four Nations</p>
+          <Link
+            href="/planner"
+            className={`${TYPE.heading} block min-w-0 grow basis-0 truncate rounded-sm lg:grow-0 lg:basis-auto ${FOCUS}`}
+          >
+            The Four Nations
+          </Link>
           {/* The four days are the way through the lineup: each jumps to its band, and the one
               you are reading lights up as you scroll. */}
           <nav
@@ -213,24 +234,11 @@ function Site() {
                 </button>
               );
             })}
-            {/* Search & filter closes the bar: the days move through the lineup, this narrows it. */}
-            <button
-              type="button"
-              aria-haspopup="dialog"
-              aria-label={active.length > 0 ? `Search and filter, ${active.length} active` : "Search and filter"}
-              title="Search & filter"
-              onClick={() => setFiltering(true)}
-              className={`inline-flex shrink-0 cursor-pointer items-center gap-1.5 border-[1.5px] border-(--ink) px-2.5 py-1.5 text-sm font-medium ${SHAPE.button} ${FOCUS} ${active.length > 0 ? "bg-(--el-wash)" : "bg-(--paper) hover:bg-(--el-wash)"}`}
-            >
-              <SearchIcon className="h-5 w-5" />
-              <span className="hidden xl:inline">Search &amp; filter</span>
-              {active.length > 0 && <Badge tone="count" count={active.length} />}
-            </button>
           </nav>
           <button
             ref={journeyButton}
             type="button"
-            aria-expanded={!!open}
+            aria-expanded={open}
             aria-controls="journey-drawer"
             onClick={() => openDrawer(!open)}
             className={`order-2 ml-auto inline-flex shrink-0 cursor-pointer items-center gap-2 border-[1.5px] border-(--ink) bg-(--ink) px-3 py-2 font-medium text-(--paper) hover:brightness-[1.35] sm:px-4 lg:order-3 ${SHAPE.button} ${FOCUS}`}
@@ -246,132 +254,76 @@ function Site() {
         </div>
       </header>
 
-      <main>
-        <section className="mx-auto max-w-6xl px-4 pt-8 sm:px-8">
-          <Image
-            src={festivalPoster}
-            alt="The Four Nations Music Festival. Four elements, one stage. A young monk sits on a rock at sunset, looking down on a glowing festival stage and crowds in a valley below a cliffside city."
-            priority
-            sizes="(min-width: 1152px) 1088px, 100vw"
-            className={`h-auto w-full border-[1.5px] border-(--ink) ${SHAPE.card}`}
-          />
-          <h1 className={`mt-6 ${TYPE.display}`}>Plan your four days</h1>
-          <p className="mt-3 max-w-2xl text-lg leading-relaxed">
-            One hundred artists from four nations play across six stages, Thursday to Sunday. Tap a
-            name to see when and where. <b>Add</b> it to your journey, or flag it as <b>interested</b>{" "}
-            and decide later. We&rsquo;ll warn you if you&rsquo;re booked in two places at once.
-          </p>
-        </section>
+      {children}
 
-        <section id="lineup" aria-labelledby="lineup-title" className="mx-auto max-w-6xl scroll-mt-28 px-4 pt-14 pb-24 sm:px-8">
-          <h2 id="lineup-title" className={TYPE.heading}>
-            The lineup
-          </h2>
-          <p className="mt-1 text-(--ink-muted)" aria-live="polite">
-            {active.length === 0
-              ? "Tap a name for when and where. To narrow it down, use the search button in the bar above."
-              : shownCount === 0
-                ? "No one matches all of these. Remove a filter below."
-                : `${shownCount} of ${LINEUP.length} artists match. Everyone else fades back.`}
-          </p>
-          <div className="mt-3 mb-6">
-            <FilterChips chips={active} onClear={clearAll} />
-          </div>
-          <LineupPoster
-            saved={saved}
-            onToggle={toggle}
-            flagged={flagged}
-            onFlag={(a) => setFlagged((p) => toggled(p, a))}
-            shown={active.length > 0 ? isShown : undefined}
-          />
-        </section>
-      </main>
-
-      <footer className="border-t-[1.5px] border-dashed border-(--line) px-4 py-8 text-center text-sm text-(--ink-muted)">
+      <footer className="relative border-t-[1.5px] border-dashed border-(--line) bg-(--parchment) px-4 py-8 text-center text-sm text-(--ink-muted)">
         <p>Nothing is saved: your journey resets when you reload.</p>
         <p className="mt-2 flex flex-wrap items-center justify-center gap-4">
-          <Link href="/" className={`rounded-sm underline underline-offset-4 ${FOCUS}`}>
-            All work
-          </Link>
-          <Link href="/design-systems/avatar" className={`rounded-sm underline underline-offset-4 ${FOCUS}`}>
-            Design system
-          </Link>
-          <Link href="/mood-boards/avatar" className={`rounded-sm underline underline-offset-4 ${FOCUS}`}>
-            Mood board
-          </Link>
+          {[
+            ["/planner", "Lineup"],
+            ["/planner/festival", "The festival"],
+            ["/design-systems/avatar", "Design system"],
+            ["/mood-boards/avatar", "Mood board"],
+            ["/", "All work"],
+          ].map(([href, label]) => (
+            <Link key={href} href={href} className={`rounded-sm underline underline-offset-4 ${FOCUS}`}>
+              {label}
+            </Link>
+          ))}
         </p>
       </footer>
 
-      <Modal open={filtering} onClose={() => setFiltering(false)} labelledBy="filter-title" width="w-[min(46rem,calc(100%-2rem))]">
-        <div className={`flex max-h-[calc(100dvh-2rem)] flex-col border-[1.5px] border-(--ink) bg-(--paper) ${SHAPE.card}`}>
-          <header className="flex items-start justify-between gap-3 border-b-[1.5px] border-dashed border-(--line) px-5 pt-4 pb-3 sm:px-6">
-            <div>
-              <p className={`${TYPE.label} text-(--ink-muted)`}>The lineup</p>
-              <h2 id="filter-title" className={`mt-1 ${TYPE.heading}`}>
-                Search &amp; filter
-              </h2>
-            </div>
-            <IconButton label="Close" onClick={() => setFiltering(false)}>
-              <CloseIcon />
-            </IconButton>
-          </header>
-          <div className="flex-1 space-y-7 overflow-y-auto px-5 py-5 sm:px-6">
-            <TextField
-              label="Search by artist"
-              type="search"
-              placeholder="Try “dragon”"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              autoFocus
-            />
-            <FilterGroups filters={filters} onChange={setFilters} />
-            <div className="grid gap-6 sm:grid-cols-3">
-              <fieldset>
-                <legend className={`${TYPE.label} text-(--ink-muted)`}>Show</legend>
-                <div className="mt-3 space-y-2.5">
-                  <Radio name="show" value="all" checked={show === "all"} onChange={() => setShow("all")} label="Everyone" />
-                  <Radio
-                    name="show"
-                    value="journey"
-                    checked={show === "journey"}
-                    onChange={() => setShow("journey")}
-                    label={<Counted name="Only my journey" count={saved.size} />}
-                  />
-                  <Radio
-                    name="show"
-                    value="flagged"
-                    checked={show === "flagged"}
-                    onChange={() => setShow("flagged")}
-                    label={<Counted name="Only flagged" count={flagged.size} />}
-                  />
-                </div>
-              </fieldset>
-              <fieldset className="sm:col-span-2">
-                <legend className={`${TYPE.label} text-(--ink-muted)`}>Clashes</legend>
-                <div className="mt-3">
-                  <Checkbox
-                    label="Hide sets that clash with my journey"
-                    checked={hideClashes}
-                    onChange={(e) => setHideClashes(e.target.checked)}
-                  />
-                </div>
-              </fieldset>
-            </div>
+      {/* Once something is on your journey, a tab waits on the right edge to open it. */}
+      {saved.size > 0 && !open && (
+        <button
+          type="button"
+          aria-controls="journey-drawer"
+          aria-expanded={false}
+          aria-label={`Open my journey, ${saved.size} set${saved.size === 1 ? "" : "s"}${clashCount > 0 ? `, ${clashCount} clash${clashCount > 1 ? "es" : ""}` : ""}`}
+          onClick={() => openDrawer(true)}
+          className={`fixed top-1/2 right-0 z-40 flex -translate-y-1/2 cursor-pointer flex-col items-center gap-2 rounded-l-[14px_12px] border-[1.5px] border-r-0 border-(--ink) bg-(--ink) px-2 py-4 text-(--paper) shadow-[-4px_4px_0_rgba(0,0,0,0.12)] hover:brightness-[1.35] motion-safe:animate-stamp ${FOCUS}`}
+        >
+          <span aria-hidden="true" className="text-sm font-medium [writing-mode:vertical-rl] rotate-180">
+            My journey
+          </span>
+          <span key={saved.size} className="inline-flex motion-safe:animate-stamp">
+            <Badge tone="count" count={saved.size} />
+          </span>
+          {clashCount > 0 && <Seal className="h-6 w-6 text-sm" />}
+        </button>
+      )}
+
+      {/* The clash flag: pops up after an add that double-books you, then fades away. */}
+      <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-center px-4">
+        {clashFlag && (
+          <div
+            key={clashFlag.id}
+            role="status"
+            className={`pointer-events-auto flex max-w-md items-center gap-3 border-[1.5px] border-(--ink) bg-(--paper) py-3 pr-3 pl-4 shadow-[0_6px_0_rgba(0,0,0,0.12)] transition-opacity duration-500 motion-safe:animate-stamp ${SHAPE.card} ${flagShown ? "opacity-100" : "opacity-0"}`}
+          >
+            <Seal className="h-9 w-9 text-xl" />
+            <p className="min-w-0 flex-1 text-sm">
+              <b>{clashFlag.set.artist}</b> clashes with <b>{clashFlag.with.map((o) => o.artist).join(", ")}</b> at{" "}
+              {clashFlag.set.time} on {ELEMENTS[clashFlag.set.day].dayName}.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setFlagShown(false);
+                setClashFlag(null);
+                openDrawer(true, clashFlag.set.day);
+              }}
+              className={`shrink-0 cursor-pointer rounded-sm text-sm font-medium underline decoration-2 underline-offset-4 ${FOCUS}`}
+            >
+              See my journey
+            </button>
           </div>
-          <footer className="flex flex-wrap items-center justify-between gap-3 border-t-[1.5px] border-dashed border-(--line) px-5 py-4 sm:px-6">
-            <Button variant="secondary" onClick={clearAll} disabled={active.length === 0}>
-              Clear all
-            </Button>
-            <Button onClick={() => setFiltering(false)}>
-              {shownCount === LINEUP.length ? "Show all 100 artists" : `Show ${shownCount} artist${shownCount === 1 ? "" : "s"}`}
-            </Button>
-          </footer>
-        </div>
-      </Modal>
+        )}
+      </div>
 
       <JourneyDrawer
-        open={!!open}
-        focusOnOpen={open === "user"}
+        open={open}
+        focusOnOpen
         onOpenChange={openDrawer}
         tab={tab}
         onTab={setTab}
@@ -384,7 +336,238 @@ function Site() {
         onUnflag={(a) => setFlagged((p) => toggled(p, a))}
         onKeep={keep}
       />
+    </PlannerContext.Provider>
+  );
+}
+
+/* The lineup page --------------------------------------------------------------------- */
+
+export function LineupPage() {
+  const p = usePlanner();
+  const { setElement } = useElement();
+  const box = useRef<HTMLDivElement>(null);
+  const [filtering, setFiltering] = useState(false);
+  const { registerDayJump } = p;
+
+  // Search & filter: one test of who matches. Everyone else fades back on the poster.
+  const q = p.query.trim().toLowerCase();
+  const isShown = (s: FestivalSet) =>
+    matchesFilters(s, p.filters) &&
+    (q === "" || s.artist.toLowerCase().includes(q)) &&
+    (p.show === "all" || (p.show === "journey" ? p.saved.has(s.artist) : p.flagged.has(s.artist))) &&
+    !(p.hideClashes && !p.saved.has(s.artist) && clashesWith(s, p.savedList).length > 0);
+  const shownCount = LINEUP.filter(isShown).length;
+  const chips: ActiveFilter[] = [
+    ...filterChips(p.filters, p.setFilters),
+    ...(p.show !== "all"
+      ? [{ key: "show", label: p.show === "journey" ? "Only my journey" : "Only flagged", remove: () => p.setShow("all") }]
+      : []),
+    ...(p.hideClashes ? [{ key: "clash", label: "No clashes", remove: () => p.setHideClashes(false) }] : []),
+  ];
+  const narrowed = chips.length > 0 || q !== "";
+  const clearFilters = () => {
+    p.setFilters(noFilters());
+    p.setShow("all");
+    p.setHideClashes(false);
+  };
+
+  // A day button scrolls the lineup frame to that day, and brings the frame into view.
+  useEffect(() => {
+    const jump = (day: ElementKey) => {
+      const frame = box.current;
+      const band = frame?.querySelector<HTMLElement>(`section[data-day="${day}"]`);
+      if (!frame || !band) return;
+      const behavior = reducedMotion() ? "auto" : "smooth";
+      frame.scrollTo({ top: band.offsetTop, behavior });
+      const headerBottom = document.querySelector("header")?.getBoundingClientRect().bottom ?? 0;
+      const r = frame.getBoundingClientRect();
+      if (r.top < headerBottom || r.top > window.innerHeight * 0.6) frame.scrollIntoView({ behavior, block: "start" });
+    };
+    registerDayJump(jump);
+    // Arriving from another page with a day in the address, e.g. /planner#fire.
+    const fromHash = window.location.hash.slice(1) as ElementKey;
+    const arrive = ELEMENT_ORDER.includes(fromHash)
+      ? setTimeout(() => {
+          setElement(fromHash);
+          jump(fromHash);
+        }, 60)
+      : undefined;
+    return () => {
+      clearTimeout(arrive);
+      registerDayJump(null);
+    };
+  }, [registerDayJump, setElement]);
+
+  // Scroll spy: the last band to reach the top fifth of the frame is the page's element.
+  // At the very bottom it is the last day, whose band may be too short to reach the top.
+  useEffect(() => {
+    const frame = box.current;
+    if (!frame) return;
+    let queued = 0;
+    const spy = () => {
+      queued = 0;
+      const bands = [...frame.querySelectorAll<HTMLElement>("section[data-day]")];
+      const atBottom = frame.scrollTop >= frame.scrollHeight - frame.clientHeight - 2;
+      const line = frame.scrollTop + frame.clientHeight * 0.2;
+      const current = atBottom ? bands.at(-1) : bands.filter((b) => b.offsetTop <= line).at(-1);
+      if (current) setElement(current.dataset.day as ElementKey);
+    };
+    const onScroll = () => {
+      if (!queued) queued = requestAnimationFrame(spy);
+    };
+    frame.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      frame.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(queued);
+    };
+  }, [setElement]);
+
+  return (
+    <>
+      {/* The festival painting stays put behind the page; the lineup sheet slides up over it. */}
+      <div aria-hidden="true" className="pointer-events-none fixed inset-x-0 top-[7.2rem] -z-10 lg:top-[4.25rem]">
+        <Image src={festivalPoster} alt="" priority sizes="100vw" className="h-auto w-full" />
+      </div>
+
+      <main>
+        <div className="h-[30vw] lg:h-[17vw]" />
+        <div className="border-t-[1.5px] border-(--ink) bg-(--parchment)">
+          <div className="mx-auto max-w-6xl px-4 pt-6 pb-16 sm:px-8">
+            <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+              <h1 className={TYPE.display}>Plan your four days</h1>
+              <Link
+                href="/planner/festival"
+                className={`inline-flex items-center gap-2 border-[1.5px] border-(--ink) bg-(--paper) px-4 py-2 font-medium hover:bg-(--el-wash) ${SHAPE.button} ${FOCUS}`}
+              >
+                The festival
+              </Link>
+            </div>
+            <p className="mt-3 max-w-3xl leading-relaxed sm:text-lg">
+              One hundred artists from four nations on six stages, Thursday to Sunday. Water rolls in on
+              Thursday, earth shakes on Friday, fire roars on Saturday, and the air carries it all home on
+              Sunday.
+            </p>
+
+            <section id="lineup" aria-labelledby="lineup-title" className="mt-6 sm:mt-8">
+              <h2 id="lineup-title" className={TYPE.heading}>
+                The lineup
+              </h2>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <div className="relative min-w-0 grow basis-60 sm:max-w-md">
+                  <SearchIcon className="pointer-events-none absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-(--ink-muted)" />
+                  <TextField
+                    label="Search artists"
+                    hideLabel
+                    type="search"
+                    placeholder="Search artists"
+                    value={p.query}
+                    onChange={(e) => p.setQuery(e.target.value)}
+                    style={{ paddingLeft: "2.75rem" }}
+                  />
+                </div>
+                <Button
+                  variant="secondary"
+                  aria-haspopup="dialog"
+                  aria-label={chips.length > 0 ? `Filters, ${chips.length} active` : undefined}
+                  onClick={() => setFiltering(true)}
+                >
+                  <FilterIcon className="h-5 w-5" />
+                  Filters
+                  {chips.length > 0 && <Badge tone="count" count={chips.length} />}
+                </Button>
+                <p className="text-sm text-(--ink-muted)" aria-live="polite">
+                  {!narrowed ? `${LINEUP.length} artists` : shownCount === 0 ? "No artists match" : `${shownCount} of ${LINEUP.length} artists`}
+                </p>
+              </div>
+              {chips.length > 0 && (
+                <div className="mt-3">
+                  <FilterChips chips={chips} onClear={clearFilters} />
+                </div>
+              )}
+              <div className="mt-5">
+                <LineupPoster
+                  boxed
+                  boxRef={box}
+                  saved={p.saved}
+                  onToggle={p.toggle}
+                  flagged={p.flagged}
+                  onFlag={p.flag}
+                  shown={narrowed ? isShown : undefined}
+                />
+              </div>
+            </section>
+          </div>
+        </div>
+      </main>
+
+      <Modal open={filtering} onClose={() => setFiltering(false)} labelledBy="filter-title" width="w-[min(46rem,calc(100%-2rem))]">
+        <div className={`flex max-h-[calc(100dvh-2rem)] flex-col border-[1.5px] border-(--ink) bg-(--paper) ${SHAPE.card}`}>
+          <header className="flex items-start justify-between gap-3 border-b-[1.5px] border-dashed border-(--line) px-5 pt-4 pb-3 sm:px-6">
+            <div>
+              <p className={`${TYPE.label} text-(--ink-muted)`}>The lineup</p>
+              <h2 id="filter-title" className={`mt-1 ${TYPE.heading}`}>
+                Filters
+              </h2>
+            </div>
+            <IconButton label="Close" onClick={() => setFiltering(false)}>
+              <CloseIcon />
+            </IconButton>
+          </header>
+          <div className="flex-1 space-y-7 overflow-y-auto px-5 py-5 sm:px-6">
+            <FilterGroups filters={p.filters} onChange={p.setFilters} />
+            <div className="grid gap-6 sm:grid-cols-3">
+              <fieldset>
+                <legend className={`${TYPE.label} text-(--ink-muted)`}>Show</legend>
+                <div className="mt-3 space-y-2.5">
+                  <Radio name="show" value="all" checked={p.show === "all"} onChange={() => p.setShow("all")} label="Everyone" />
+                  <Radio
+                    name="show"
+                    value="journey"
+                    checked={p.show === "journey"}
+                    onChange={() => p.setShow("journey")}
+                    label={<Counted name="Only my journey" count={p.saved.size} />}
+                  />
+                  <Radio
+                    name="show"
+                    value="flagged"
+                    checked={p.show === "flagged"}
+                    onChange={() => p.setShow("flagged")}
+                    label={<Counted name="Only flagged" count={p.flagged.size} />}
+                  />
+                </div>
+              </fieldset>
+              <fieldset className="sm:col-span-2">
+                <legend className={`${TYPE.label} text-(--ink-muted)`}>Clashes</legend>
+                <div className="mt-3">
+                  <Checkbox
+                    label="Hide sets that clash with my journey"
+                    checked={p.hideClashes}
+                    onChange={(e) => p.setHideClashes(e.target.checked)}
+                  />
+                </div>
+              </fieldset>
+            </div>
+          </div>
+          <footer className="flex flex-wrap items-center justify-between gap-3 border-t-[1.5px] border-dashed border-(--line) px-5 py-4 sm:px-6">
+            <Button variant="secondary" onClick={clearFilters} disabled={chips.length === 0}>
+              Clear all
+            </Button>
+            <Button onClick={() => setFiltering(false)}>
+              {shownCount === LINEUP.length ? "Show all 100 artists" : `Show ${shownCount} artist${shownCount === 1 ? "" : "s"}`}
+            </Button>
+          </footer>
+        </div>
+      </Modal>
     </>
+  );
+}
+
+function Counted({ name, count }: { name: string; count: number }) {
+  return (
+    <span className="flex items-center gap-2">
+      {name}
+      <span className="text-sm text-(--ink-muted) tabular-nums">{count}</span>
+    </span>
   );
 }
 
@@ -491,7 +674,6 @@ function JourneyDrawer({
         <div id={`${id}-panel`} role="tabpanel" aria-labelledby={`${id}-${tab}`} className="flex-1 overflow-y-auto px-5 py-5">
           {tab === "journey" ? (
             <div className="space-y-8">
-
               <section aria-label={`${el.dayName} journey`}>
                 <div role="group" aria-label="Day" className="flex gap-1.5">
                   {ELEMENT_ORDER.map((key) => {
@@ -585,4 +767,3 @@ function JourneyDrawer({
     </div>
   );
 }
-

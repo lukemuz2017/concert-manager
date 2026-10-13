@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type Ref } from "react";
 
 import { clashesWith, DAY_ORDER, isHeadliner, LINEUP, SLOTS, type FestivalSet } from "./lineup";
 import { ELEMENTS, SHAPE, TYPE } from "./tokens";
@@ -259,6 +259,8 @@ export function LineupPoster({
   onFlag,
   filters,
   shown,
+  boxed = false,
+  boxRef,
 }: {
   saved: Set<string>;
   onToggle: (artist: string) => void;
@@ -267,6 +269,10 @@ export function LineupPoster({
   filters?: Filters;
   // Any wider test of who matches (search, journey, clashes). Non-matches fade back.
   shown?: (set: FestivalSet) => boolean;
+  // Boxed: the poster scrolls inside its own frame, each day's banner pins to the top of
+  // the frame while you read that day, and the festival title is left to the page.
+  boxed?: boolean;
+  boxRef?: Ref<HTMLDivElement>;
 }) {
   const [picked, setPicked] = useState<Picked | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -307,14 +313,22 @@ export function LineupPoster({
   );
 
   return (
-    <div className={`border-[1.5px] border-(--ink) bg-(--parchment) px-4 py-6 sm:px-8 sm:py-8 ${SHAPE.card}`}>
+    <div
+      ref={boxRef}
+      tabIndex={boxed ? 0 : undefined}
+      role={boxed ? "region" : undefined}
+      aria-label={boxed ? "Lineup" : undefined}
+      className={`border-[1.5px] border-(--ink) bg-(--parchment) px-4 py-6 sm:px-8 sm:py-8 ${SHAPE.card} ${boxed ? `relative max-h-[calc(100dvh-9rem)] scroll-mt-[8.2rem] overflow-y-auto lg:max-h-[calc(100dvh-6.5rem)] lg:scroll-mt-[5.25rem] ${FOCUS}` : ""}`}
+    >
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className={TYPE.display}>The Four Nations</p>
-          <p className="mt-1 text-sm font-medium tracking-[0.5em] uppercase">
-            Music Festival · <span className="whitespace-nowrap">Thu–Sun</span>
-          </p>
-        </div>
+        {!boxed && (
+          <div>
+            <p className={TYPE.display}>The Four Nations</p>
+            <p className="mt-1 text-sm font-medium tracking-[0.5em] uppercase">
+              Music Festival · <span className="whitespace-nowrap">Thu–Sun</span>
+            </p>
+          </div>
+        )}
         <ul aria-label="Nations" className="flex flex-wrap gap-x-4 gap-y-1 text-sm font-medium">
           {DAY_ORDER.map((n) => (
             <li key={n}>
@@ -338,7 +352,7 @@ export function LineupPoster({
           >
             {/* The day, plastered across the top of its band in the day's element color. */}
             <h4
-              className={`${TYPE.display} flex items-center justify-between gap-4 px-4 py-1.5 uppercase md:col-span-2`}
+              className={`${TYPE.display} flex items-center justify-between gap-4 px-4 py-1.5 uppercase md:col-span-2 ${boxed ? "sticky -top-6 z-10 sm:-top-8" : ""}`}
               style={{ background: el.fill, color: el.on }}
             >
               {el.dayName}
