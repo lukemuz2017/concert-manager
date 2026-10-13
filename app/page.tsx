@@ -19,7 +19,7 @@ const SECTIONS: { title: string; items: Item[] }[] = [
     items: [
       { name: "Candyland Vibes", href: "/design-systems/candyland" },
       { name: "Timeless Classical", href: "/design-systems/classical" },
-      { name: "Design system 3" },
+      { name: "Four Nations", href: "/design-systems/avatar" },
     ],
   },
   {
