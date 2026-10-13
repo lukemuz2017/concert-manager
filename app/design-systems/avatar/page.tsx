@@ -110,8 +110,8 @@ const TYPE_ROLES = [
     use: "Everything you read.",
     sample: (
       <p className={`max-w-prose ${TYPE.body}`}>
-        Flying Lemurs play the Crystal Catacombs at 5:30, and Kuzon&apos;s Crew start at 7:00 across the grounds.
-        Leave <b>thirteen minutes early</b>, or miss the opening.
+        Monk Gyatso plays the Western Air Temple until 6:45, and Kuzon&apos;s Crew start at 7:00 across the grounds.
+        Leave <b>ten minutes before the end</b>, or miss the opening.
       </p>
     ),
   },

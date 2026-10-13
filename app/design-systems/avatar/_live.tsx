@@ -123,7 +123,7 @@ export function MotionLab() {
 
 export function LiveComponents() {
   const [saved, setSaved] = useState(
-    () => new Set(["Flying Lemurs", "Kuzon's Crew", "Dragon of the West", "Moon Spirit Choir", "Badgermoles"]),
+    () => new Set(["Monk Gyatso", "Kuzon's Crew", "Dragon of the West", "Moon Spirit Choir", "Badgermoles"]),
   );
   const [flagged, setFlagged] = useState(() => new Set(["Bato's Boat", "Whale-Tooth Drums"]));
   const [lineup, setLineup] = useState<LineupQuery>(anyLineup);
@@ -175,7 +175,7 @@ export function LiveComponents() {
 
       <Panel
         title="My journey: tabs, path, map & clash"
-        note="What the journey drawer holds. Saturday shows a tight walk from Flying Lemurs to Kuzon's Crew; add Bato's Boat on the poster to collide with Kuzon's Crew at 7:00. The clock is set to 6:40 PM."
+        note="What the journey drawer holds. Saturday shows a tight walk: Monk Gyatso ends at 6:45 at the Western Air Temple, but Kuzon's Crew start at 7:00 a 25-minute walk away. Add Bato's Boat on the poster to collide with Kuzon's Crew at 7:00."
       >
         <div className={`flex h-[46rem] flex-col overflow-hidden border-[1.5px] border-(--ink) bg-(--paper) ${SHAPE.card}`}>
           <JourneySheet
@@ -210,7 +210,7 @@ export function LiveComponents() {
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">
             <Badge tone="clash" />
-            <Badge tone="tight" count={13} />
+            <Badge tone="tight" count={25} />
             <span className="inline-flex items-center gap-2">
               <Badge tone="count" count={saved.size} />
               <span className="text-(--ink-muted)">On your journey</span>

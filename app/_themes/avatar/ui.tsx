@@ -24,6 +24,9 @@ import {
   LAKE,
   OUTFLOW,
   LANDMARKS,
+  clock,
+  CHANGEOVER,
+  duration,
   legBetween,
   LINEUP,
   RIVER,
@@ -32,7 +35,7 @@ import {
   slotMinutes,
   STAGE_POS,
   STAGES,
-  TIGHT_WALK,
+  timeRange,
   trailPath,
   trailPoints,
   TRAILS,
@@ -950,11 +953,6 @@ export function PassportStamp({ set }: { set: FestivalSet }) {
 
 /* Planner widgets: the day as a journey ------------------------------------ */
 
-function clock(minutes: number) {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
-}
 
 function sortBySlot(sets: FestivalSet[]) {
   return [...sets].sort((a, b) => SLOTS.indexOf(a.time) - SLOTS.indexOf(b.time));
@@ -962,7 +960,16 @@ function sortBySlot(sets: FestivalSet[]) {
 
 // The day's saved sets as a trail, with what happens between them:
 // stay put, walk (and how early to leave), or free time.
-export function JourneyPath({ day, saved }: { day: ElementKey; saved: FestivalSet[] }) {
+export function JourneyPath({
+  day,
+  saved,
+  onRemove,
+}: {
+  day: ElementKey;
+  saved: FestivalSet[];
+  // When given, each stop gets a button to take it off the journey.
+  onRemove?: (artist: string) => void;
+}) {
   const el = ELEMENTS[day];
   const sets = sortBySlot(saved.filter((s) => s.day === day));
   if (sets.length === 0) {
@@ -979,9 +986,14 @@ export function JourneyPath({ day, saved }: { day: ElementKey; saved: FestivalSe
         const leg = next && next.time !== s.time ? legBetween(s, next) : null;
         const clashed = sets.some((o) => o !== s && o.time === s.time);
         return (
-          <li key={s.artist} className="relative pb-2">
+          <li key={s.artist} className={`relative pb-2 ${onRemove ? "pr-11" : ""}`}>
             <span aria-hidden="true" className="absolute top-1.5 -left-[33px] h-4 w-4 rounded-full border-[1.5px] border-(--ink) bg-(--el)" />
-            <p className={`${TYPE.label} tracking-[0.1em]! text-(--ink-muted)`}>{s.time}</p>
+            {onRemove && (
+              <IconButton label={`Remove ${s.artist} from your journey`} onClick={() => onRemove(s.artist)} className="absolute top-0 right-0">
+                <CloseIcon />
+              </IconButton>
+            )}
+            <p className={`${TYPE.label} tracking-[0.1em]! text-(--ink-muted)`}>{timeRange(s.time)}</p>
             <p className="flex flex-wrap items-center gap-x-2 font-medium">
               {s.artist}
               {clashed && <Seal className="h-5 w-5 text-xs" />}
@@ -993,16 +1005,18 @@ export function JourneyPath({ day, saved }: { day: ElementKey; saved: FestivalSe
             {leg && next && (
               <p className="my-3 flex flex-wrap items-center gap-2 text-sm">
                 {leg.kind === "stay" && <span className="text-(--ink-muted)">Stay at {s.stage.name}.</span>}
-                {leg.kind === "free" && <span className="text-(--ink-muted)">Free for {leg.slots * 1.5} hours. Time for tea.</span>}
+                {leg.kind === "free" && <span className="text-(--ink-muted)">Free for {duration(leg.minutes)}. Time for tea.</span>}
                 {leg.kind === "walk" && leg.tight && (
                   <>
                     <Badge tone="tight" count={leg.minutes} />
-                    <span>Leave {leg.minutes} min early for {next.stage.name}.</span>
+                    <span>
+                      Leave at <b>{leg.leaveAt}</b>, {leg.early} min before it ends, for {next.stage.name}.
+                    </span>
                   </>
                 )}
                 {leg.kind === "walk" && !leg.tight && (
-                  <span className="text-(--ink-muted)">
-                    {leg.minutes} min walk to {next.stage.name}.
+                  <span>
+                    Leave when it ends at <b>{leg.ends}</b>, a {leg.minutes} min walk to {next.stage.name}.
                   </span>
                 )}
               </p>
@@ -1024,7 +1038,7 @@ const LANDMARK_LABEL: Record<string, { dx: number; dy: number; anchor: "start" |
 // The grounds as a trail map: footpaths between the gate, the landmarks, and the six
 // stages. The day's route follows the trails from the gate through each stop in order,
 // and every leg says how many minutes it takes on foot. A leg between back-to-back sets
-// that takes ten minutes or more is a tight walk, so its label turns to ink.
+// that takes longer than the 15-minute changeover is a tight walk, so its label turns to ink.
 export function JourneyMap({ day, saved }: { day: ElementKey; saved: FestivalSet[] }) {
   const el = ELEMENTS[day];
   const stops: FestivalSet[] = [];
@@ -1038,7 +1052,7 @@ export function JourneyMap({ day, saved }: { day: ElementKey; saved: FestivalSet
     if (s.stage.name !== from) {
       const r = routeBetween(from, s.stage.name);
       const backToBack = i > 0 && SLOTS.indexOf(s.time) - SLOTS.indexOf(stops[i - 1].time) === 1;
-      legs.push({ key: `${from}-${s.stage.name}-${i}`, ...r, tight: backToBack && r.minutes >= TIGHT_WALK, arrival: i === 0 });
+      legs.push({ key: `${from}-${s.stage.name}-${i}`, ...r, tight: backToBack && r.minutes > CHANGEOVER, arrival: i === 0 });
     }
     from = s.stage.name;
   });

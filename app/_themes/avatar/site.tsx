@@ -8,7 +8,7 @@ import { createContext, useCallback, useContext, useEffect, useId, useRef, useSt
 import festivalPoster from "@/app/mood-boards/avatar/images/festival-poster.jpg";
 
 import { fontVariables } from "./fonts";
-import { clashesWith, LINEUP, SLOTS, type FestivalSet } from "./lineup";
+import { clashesWith, LINEUP, SLOTS, timeRange, type FestivalSet } from "./lineup";
 import { anyLineup, FilterDialog, lineupChips, lineupMatcher, LineupSearchBar, type LineupQuery } from "./lineup-controls";
 import { LineupPoster } from "./poster";
 import { ELEMENT_ORDER, ELEMENTS, elementVars, SHAPE, TYPE, type ElementKey } from "./tokens";
@@ -25,7 +25,6 @@ import {
   JourneyMap,
   JourneyPath,
   NationMark,
-  NextUp,
   SaveToggle,
   Seal,
   TextLink,
@@ -615,14 +614,8 @@ export function JourneySheet({
                   </div>
                 )}
                 <div className="mt-5">
-                  <JourneyPath day={element} saved={savedList} />
+                  <JourneyPath day={element} saved={savedList} onRemove={onToggle} />
                 </div>
-                {daySaved.length > 0 && (
-                  <div className="mt-6">
-                    <p className="mb-2 text-sm text-(--ink-muted)">On the day, with a demo clock set to 6:40 PM:</p>
-                    <NextUp day={element} saved={savedList} lineup={LINEUP} />
-                  </div>
-                )}
                 <div className="mt-6">
                   <JourneyMap day={element} saved={savedList} />
                 </div>
@@ -652,7 +645,7 @@ export function JourneySheet({
                     <div className="min-w-0 flex-1">
                       <p className="font-medium">{s.artist}</p>
                       <p className="text-sm text-(--ink-muted)">
-                        {ELEMENTS[s.day].dayName} · {s.time} · {s.stage.name}
+                        {ELEMENTS[s.day].dayName} · {timeRange(s.time)} · {s.stage.name}
                       </p>
                       {clashes.length > 0 && (
                         <p className="mt-1 flex items-center gap-1.5 text-sm font-bold">

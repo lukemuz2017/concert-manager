@@ -338,22 +338,43 @@ export function walkMinutes(from: Place, to: Place) {
   return Math.max(1, Math.round(shortest(from, to).length * WALK_PER_UNIT));
 }
 
-// Sets fill every slot back to back, so moving stages between consecutive
-// slots means leaving early. Ten minutes or more is a tight walk: a softer
-// warning than a clash, where two sets share one slot.
-export const TIGHT_WALK = 10;
+// Sets start every 1.5 hours and run 1 hr 15 min, so back-to-back sets leave a
+// 15-minute changeover. A walk that takes longer than that means leaving before the
+// set ends: a tight walk, a softer warning than a clash, where two sets share one slot.
+export const SET_MINUTES = 75;
+export const CHANGEOVER = 15;
+
+// A time like 1215 minutes after midnight as "8:15 PM".
+export function clock(minutes: number) {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
+}
+
+export const setEnd = (time: string) => clock(slotMinutes(time) + SET_MINUTES);
+// "7:00–8:15 PM"
+export const timeRange = (time: string) => `${time.replace(" PM", "")}–${setEnd(time)}`;
 
 export type Leg =
   | { kind: "stay" }
-  | { kind: "walk"; minutes: number; tight: boolean }
-  | { kind: "free"; slots: number };
+  | { kind: "walk"; minutes: number; tight: boolean; ends: string; leaveAt: string; early: number }
+  | { kind: "free"; minutes: number };
 
 export function legBetween(a: FestivalSet, b: FestivalSet): Leg {
-  const gap = SLOTS.indexOf(b.time) - SLOTS.indexOf(a.time) - 1;
-  if (gap > 0) return { kind: "free", slots: gap };
+  const end = slotMinutes(a.time) + SET_MINUTES;
+  const start = slotMinutes(b.time);
+  if (start - end > CHANGEOVER) return { kind: "free", minutes: start - end };
   if (a.stage.name === b.stage.name) return { kind: "stay" };
   const minutes = walkMinutes(a.stage.name, b.stage.name);
-  return { kind: "walk", minutes, tight: minutes >= TIGHT_WALK };
+  const leave = start - minutes;
+  return { kind: "walk", minutes, tight: leave < end, ends: clock(end), leaveAt: clock(Math.min(leave, end)), early: Math.max(0, end - leave) };
+}
+
+// "1 hr 45 min"
+export function duration(minutes: number) {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return [h ? `${h} hr` : "", m ? `${m} min` : ""].filter(Boolean).join(" ");
 }
 
 // Minutes since midnight for a slot like "7:00 PM".

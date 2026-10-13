@@ -2,10 +2,11 @@
 
 import { useEffect, useId, useLayoutEffect, useRef, useState, type Ref } from "react";
 
-import { clashesWith, DAY_ORDER, isHeadliner, LINEUP, SLOTS, type FestivalSet } from "./lineup";
+import { clashesWith, DAY_ORDER, isHeadliner, LINEUP, SLOTS, timeRange, type FestivalSet } from "./lineup";
 import { ELEMENTS, elementVars, SHAPE, TYPE } from "./tokens";
 import {
   AddButton,
+  Button,
   CheckIcon,
   CloseIcon,
   Emblem,
@@ -219,7 +220,7 @@ function NamePopover({
         <div className="p-5">
           <div className="flex items-start justify-between gap-3">
             <p className={`${TYPE.label} pt-2 text-(--ink-muted)`}>
-              {day.dayName} · {set.time}
+              {day.dayName} · {timeRange(set.time)}
             </p>
             <IconButton label="Close" onClick={onClose}>
               <CloseIcon />
@@ -246,8 +247,14 @@ function NamePopover({
             <span className="contents" style={elementVars(set.nation)}>
               <AddButton added={saved} onToggle={onToggle} />
             </span>
-            {/* Interested is lighter than a plan: it marks a set without committing the hour. */}
-            <FlagButton flagged={flagged} onToggle={onFlag} artist={set.artist} />
+            {saved && (
+              <Button variant="secondary" onClick={onToggle} aria-label={`Remove ${set.artist} from your journey`}>
+                Remove
+              </Button>
+            )}
+            {/* Interested is lighter than a plan: it marks a set without committing the hour,
+                so it only shows until the set is on your journey. */}
+            {!saved && <FlagButton flagged={flagged} onToggle={onFlag} artist={set.artist} />}
           </div>
         </div>
       )}

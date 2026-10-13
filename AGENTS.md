@@ -44,8 +44,8 @@ design choices in class. So:
 A **concert planner for festival attendees**: you add the artists you want to see, and it
 flags when you have double-booked yourself.
 
-- Four days (Thu–Sun), six stages, six 1.5-hour slots a day, and 100 artists with one set
-  each. Every set sits on the same grid, so a conflict is an exact day+slot match.
+- Four days (Thu–Sun), six stages, and 100 artists with one set each. Sets start every 1.5
+  hours (six a day) and run 1 hr 15 min, leaving a 15-minute changeover. Every set sits on the same grid, so a conflict is an exact day+slot match.
 - **Nothing is saved.** No database, accounts, external APIs, or `localStorage`. React state
   only; it resets on reload.
 
