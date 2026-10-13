@@ -103,7 +103,7 @@ export const ELEMENTS: Record<
     glyph: "火",
     fill: "#A84530",
     on: "#FFFFFF",
-    line: "#A84530",
+    line: "#A3262A",
     wash: "#F1DDD5",
     motion: {
       name: "Strike",
@@ -127,7 +127,7 @@ export const ELEMENTS: Record<
     glyph: "氣",
     fill: "#CB8131",
     on: "#2B2B2B",
-    line: "#A85E14",
+    line: "#B07514",
     wash: "#F6E3C6",
     motion: {
       name: "Drift",
